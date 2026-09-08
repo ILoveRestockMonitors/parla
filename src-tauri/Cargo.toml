@@ -1,0 +1,42 @@
+[package]
+name = "parla"
+version = "0.2.0"
+description = "Parla - local-first system-wide voice dictation (clean-room clone)"
+edition = "2021"
+
+[build-dependencies]
+# Phase 1: tauri-build when the Tauri shell is wired
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+ureq = { version = "2", default-features = false, features = ["json"] } # localhost HTTP only - no TLS, no ring/C
+rusqlite = { version = "0.32", features = ["bundled"] } # WinLibs gcc compiles sqlite3.c fine (verified 2026-08-22)
+arboard = "3"
+enigo = "0.2"
+cpal = "0.15"
+windows = { version = "0.56", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_ProcessStatus",
+    "Win32_System_SystemInformation",
+    "Win32_UI_Accessibility",
+    "Win32_System_Com",
+    "Win32_System_Variant",
+] }
+# Phase 1 enables (heavy native builds - staged deliberately):
+# cpal = "0.15"            # mic capture
+# whisper-rs = "0.13"      # whisper.cpp bindings (needs cmake)
+# tauri = { version = "2", features = ["tray-icon"] }
+# tauri-plugin-single-instance = "2"
+# Phase 4 enables (needs a real C toolchain - MSYS2/mingw-w64 or VS Build Tools;
+# rustup's self-contained gcc lacks cc1 and cannot compile bundled sqlite3.c):
+# rusqlite = { version = "0.32", features = ["bundled"] }

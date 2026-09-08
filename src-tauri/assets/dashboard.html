@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parla</title>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --fg: #e6edf3; --muted: #8b949e; --accent: #7c6cff;
+    --green: #3fb950; --amber: #d29922; --red: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; padding: 28px; min-height: 100vh;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.2px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--red);
+         box-shadow: 0 0 8px transparent; transition: background 0.4s; position: relative; }
+  .dot.ok   { background: var(--green); box-shadow: 0 0 8px rgba(63,185,80,.55); }
+  .dot.warn { background: var(--amber); box-shadow: 0 0 8px rgba(210,153,34,.55); }
+  .dot.bad  { background: var(--red); }
+  .dot.pulse::after { content:""; position:absolute; inset:-4px; border-radius:50%;
+         border:1px solid currentColor; opacity:.35; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%{transform:scale(.7);opacity:.5} 100%{transform:scale(1.25);opacity:0} }
+  .spacer { flex: 1; }
+  button {
+    background: var(--card); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 13px;
+    transition: border-color .2s, transform .1s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: scale(.97); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px){ .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; transition: border-color .3s;
+  }
+  .card:hover { border-color: #3d444d; }
+  .card.wide { grid-column: 1 / -1; }
+  .label { color: var(--muted); font-size: 11px; text-transform: uppercase;
+           letter-spacing: 1.2px; margin-bottom: 8px; }
+  .big { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sub { color: var(--muted); margin-top: 6px; font-size: 12.5px; line-height: 1.5; }
+  .chip {
+    display:inline-block; font-size: 10.5px; font-weight:600; letter-spacing:.8px;
+    padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border);
+  }
+  .chip.up   { color: var(--green); border-color: rgba(63,185,80,.45); }
+  .chip.down { color: var(--red); border-color: rgba(248,81,73,.45); }
+  .chip.pin  { color: var(--accent); border-color: var(--accent); }
+  kbd {
+    background:#21262d; border:1px solid var(--border); border-bottom-width:2px;
+    border-radius:5px; padding:1px 6px; font-family: ui-monospace, Consolas, monospace; font-size:12px;
+  }
+  footer { margin-top: 16px; color: var(--muted); font-size: 12px;
+           font-family: ui-monospace, Consolas, monospace; display:flex; justify-content:space-between; }
+  .stale { opacity:.45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="dot" id="dot"></div>
+    <h1>Parla</h1>
+    <span class="spacer"></span>
+    <button id="refresh">&#8635;&nbsp;Refresh</button>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Speech server</div>
+      <div class="big"><span class="chip down" id="asr-chip">down</span><span id="asr-ms"></span></div>
+      <div class="sub" id="asr-sub">whisper-server &middot; port <span id="asr-port">9292</span></div>
+    </div>
+
+    <div class="card">
+      <div class="label">Formatter</div>
+      <div class="big">
+        <span class="chip down" id="fmt-chip">down</span>
+        <span class="chip pin" id="pin-chip" style="display:none">LOADED</span>
+        <span id="fmt-ms"></span>
+      </div>
+      <div class="sub"><span id="fmt-model">&mdash;</span> &middot; port <span id="fmt-port">11434</span></div>
+    </div>
+
+    <div class="card">
+      <div class="label">Dictionary</div>
+      <div class="big"><span id="dict-count">&mdash;</span> entries</div>
+      <div class="sub"><kbd>parla add term = replacement</kbd></div>
+    </div>
+
+    <div class="card">
+      <div class="label">Privacy</div>
+      <div class="big" id="hist-mode">&mdash;</div>
+      <div class="sub" id="hist-note"></div>
+    </div>
+
+    <div class="card wide">
+      <div class="label">Settings</div>
+      <div class="sub" id="settings-line">loading&hellip;</div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <label>Cleanup <select id="cleanup-mode"><option value="faithful">Faithful</option><option value="polished">Polished</option></select></label>
+        <label><input type="checkbox" id="retain-audio"> Retain retry audio</label>
+        <label>TTL <input id="retry-seconds" type="number" min="1" max="600" style="width:70px"></label>
+        <label><input type="checkbox" id="chimes-enabled"> Chimes</label>
+        <label><input type="checkbox" id="hud-enabled"> HUD</label>
+        <button id="save-settings">Save settings</button><span id="settings-error" class="sub"></span>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="alias" aria-label="Heard spelling" placeholder="heard spelling"><input id="canonical" aria-label="Correct spelling" placeholder="correct spelling"><button id="learn">Learn correction</button><button id="restore">Restore original</button>
+      </div>
+      <div class="sub">After requesting Restore original, return to the original field within 10 seconds. Its insertion must remain unchanged; otherwise use Copy raw.</div>
+    </div>
+
+    <div class="card wide">
+      <div class="label">Speech engine</div>
+      <div class="sub">
+        Active: <kbd id="backend-active">&mdash;</kbd>
+        &nbsp;
+        <button id="btn-whisper">Use Whisper</button>
+        <button id="btn-parakeet">Use Parakeet</button>
+        <span id="backend-note" style="opacity:.7"></span>
+      </div>
+    </div>
+    <div class="card wide">
+      <div class="label">Current dictation</div>
+      <div class="sub" id="runtime-line">idle</div>
+      <div class="sub" id="result-metrics"></div>
+      <pre id="last-raw" style="white-space:pre-wrap;margin-top:8px"></pre><pre id="last-normalized" style="white-space:pre-wrap;margin-top:8px"></pre><pre id="last-final" style="white-space:pre-wrap;margin-top:8px"></pre>
+      <button data-cmd="stop">Stop</button> <button data-cmd="cancel">Cancel</button>
+      <button data-cmd="retry">Retry</button> <button data-cmd="purge">Purge</button>
+      <button id="copy-raw">Copy raw</button> <button id="copy-final">Copy final</button>
+    </div>
+
+    <div class="card wide">
+      <div class="sub">Press <kbd>Ctrl+Space</kbd> to start and again to finish, or hold <kbd>Ctrl+Win</kbd> while speaking. Each recording can last up to 20 minutes. Keep the destination field and caret unchanged while text is processed. Retry creates a preview for you to copy. Audio retention is optional, stays in memory, and expires after the selected TTL in seconds.</div>
+      <div class="sub">Advanced settings: <kbd>%LOCALAPPDATA%\Parla\settings.json</kbd>. Restart after changing keyboard shortcuts, microphone or model paths.</div>
+    </div>
+  </div>
+
+  <footer>
+    <span id="uptime">uptime &mdash;</span>
+    <span id="updated"></span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let lastResult = {};
+
+function setChip(el, up, upText) {
+  el.textContent = up ? upText : "down";
+  el.className = "chip " + (up ? "up" : "down");
+}
+
+const MODE_NOTES = {
+  store: ["Keeping every utterance", "Transcripts are written to disk and retained until deleted."],
+  auto_delete_24h: ["Auto-delete after 24h", "Expired transcripts are pruned at startup, periodically while running, and on writes."],
+  never: ["Never store", "New transcripts are not saved to history. Previously saved history may remain on disk."]
+};
+
+function render(d) {
+  const asrUp = !!(d.asr && d.asr.alive);
+  const fmtUp = !!(d.formatter && d.formatter.alive);
+  const pin = !!(d.formatter && d.formatter.loaded);
+
+  // Speech-engine selector state
+  const bk = d.asr_backend || {};
+  const active = bk.active || "whisper";
+  $("backend-active").textContent = active;
+  const weights = bk.parakeet_weights_present;
+  const noteEl = $("backend-note");
+  if (active === "parakeet" && !bk.parakeet_alive) {
+    noteEl.textContent = "(shim starting\u2026)";
+  } else if (!weights && active === "whisper") {
+    noteEl.textContent = "(parakeet needs ONNX weights in %LOCALAPPDATA%\\Temp\\parla-parakeet\\model)";
+  } else {
+    noteEl.textContent = "";
+  }
+  $("btn-whisper").disabled = active === "whisper";
+  $("btn-parakeet").disabled = active === "parakeet" || !weights;
+
+  setChip($("asr-chip"), asrUp, "live");
+  $("asr-ms").textContent = asrUp && d.asr.connection_probe_ms != null ? (d.asr.connection_probe_ms + " ms connection probe") : "";
+  // Label reflects the ACTIVE engine, not the hardcoded port name
+  const subEl = $("asr-sub");
+  if (subEl) {
+    subEl.textContent = active === "parakeet"
+      ? "parakeet (sherpa-onnx) \u00b7 port 9293"
+      : "whisper-server \u00b7 port " + (d.asr ? d.asr.port : "?");
+  }
+
+  setChip($("fmt-chip"), fmtUp, "live");
+  $("fmt-ms").textContent = fmtUp ? (d.formatter.connection_probe_ms + " ms") : "";
+  $("fmt-port").textContent = d.formatter ? d.formatter.port : "?";
+  $("fmt-model").textContent = d.formatter ? d.formatter.model : "\u2014";
+  $("pin-chip").style.display = pin ? "" : "none";
+
+  $("dict-count").textContent = d.dictionary ? d.dictionary.entries : "\u2014";
+
+  const mode = d.history ? d.history.mode : "";
+  const note = MODE_NOTES[mode] || [mode || "\u2014", ""];
+  $("hist-mode").textContent = note[0].toUpperCase().charAt(0) + note[0].slice(1);
+  $("hist-note").textContent = note[1];
+
+  const s = d.settings || {};
+  if ((s.cleanup_mode || "faithful") === "faithful") { $("fmt-chip").textContent="unused in Faithful"; $("fmt-chip").className="chip"; }
+  if (!window.settingsDirty) {
+    $("cleanup-mode").value=s.cleanup_mode||"faithful"; $("retain-audio").checked=!!s.retain_audio_for_retry; $("retry-seconds").value=s.retry_audio_seconds||120; $("chimes-enabled").checked=s.chimes_enabled!==false; $("hud-enabled").checked=s.hud_enabled!==false;
+  }
+  const rt = d.runtime || {};
+  $("runtime-line").textContent = (rt.mode || "idle") + (rt.recording ? " · " + Math.floor((rt.recording_elapsed_ms||0)/1000) + "s" : "") + " · outstanding " + (rt.queued || 0) + (rt.processing ? " · processing" : "") + (rt.error ? " · " + rt.error : "");
+  const lr = rt.last_result || {};
+  $("restore").disabled=rt.recording || rt.processing || (rt.queued||0)>0 || !["verified","restored"].includes(lr.insertion);
+  lastResult=lr;
+  const times=lr.stage_ms||{};
+  $("result-metrics").textContent = [rt.build_id ? "Build " + rt.build_id : "", rt.device||"", rt.hook_ready===false ? "Keyboard shortcut unavailable" : "", lr.insertion ? "Insertion: "+lr.insertion : "", ...["asr","format","release_to_finish"].filter(k=>times[k]!=null).map(k=>k.replaceAll("_"," ")+": "+times[k]+" ms")].filter(Boolean).join(" · ");
+  document.querySelector('[data-cmd="retry"]').disabled=!rt.audio_retry_available;
+  document.querySelector('[data-cmd="stop"]').disabled=!rt.recording;
+  $("last-raw").textContent = "Raw: " + (lr.raw || "—"); $("last-normalized").textContent = "Normalized: " + (lr.normalized || "—"); $("last-final").textContent = "Final: " + (lr.final_text || "—") + (lr.error ? "\nError: " + lr.error : "");
+  const modelPath = (s.asr_model_path || "").split(/[\\/]/).pop() || "(none)";
+  $("settings-line").innerHTML =
+    "Hold <kbd>" + esc((s.ptt_chords || ["ctrl+win"]).join(", ")) + "</kbd> &middot; Toggle <kbd>" + esc(s.toggle_chord || "ctrl+space") + "</kbd> &middot; Model <kbd>" +
+    esc(modelPath) + "</kbd> &middot; num_ctx <kbd>" + esc(String(s.formatter_num_ctx ?? "?")) +
+    "</kbd>" + (d.settings_error ? ' <span class="chip down">defaults (settings.json unreadable)</span>' : "");
+
+  const up = d.uptime_s || 0;
+  $("uptime").textContent = "uptime " +
+    (up >= 3600 ? Math.floor(up/3600) + "h " : "") +
+    (Math.floor(up % 3600 / 60)) + "m " + (up % 60) + "s";
+
+  $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+
+  const dot = $("dot");
+  if (asrUp && ((s.cleanup_mode||"faithful")==="faithful" || (fmtUp && pin)) && rt.hook_ready!==false && !rt.error) { dot.className = "dot ok pulse"; }
+  else if (asrUp || fmtUp)        { dot.className = "dot warn"; }
+  else                            { dot.className = "dot bad"; }
+}
+window.settingsDirty=false;
+document.querySelectorAll("#cleanup-mode,#retain-audio,#retry-seconds,#chimes-enabled,#hud-enabled").forEach(e=>e.addEventListener("input",()=>window.settingsDirty=true));
+async function postJson(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-Parla-Control":"1"},body:JSON.stringify(body)});let d={};try{d=await r.json()}catch(_){}if(!r.ok)throw new Error(d.error||"request failed");return d;}
+$("save-settings").onclick=async()=>{try{await postJson("/api/settings",{cleanup_mode:$("cleanup-mode").value,retain_audio_for_retry:$("retain-audio").checked,retry_audio_seconds:Number($("retry-seconds").value),chimes_enabled:$("chimes-enabled").checked,hud_enabled:$("hud-enabled").checked});$("settings-error").textContent="Saved";window.settingsDirty=false;poll()}catch(e){$("settings-error").textContent=e.message}};
+$("learn").onclick=async()=>{try{await postJson("/api/command",{command:"learn",alias:$("alias").value,canonical:$("canonical").value});$("settings-error").textContent="Correction queued; check status for errors"}catch(e){$("settings-error").textContent=e.message}};
+$("restore").onclick=async()=>{try{await postJson("/api/command",{command:"restore"});$("settings-error").textContent="Restore requested"}catch(e){$("settings-error").textContent=e.message}};
+
+function esc(t) {
+  const div = document.createElement("div");
+  div.textContent = t;
+  return div.innerHTML;
+}
+
+async function poll() {
+  try {
+    document.body.classList.add("stale");
+    const r = await fetch("/api/status", { cache: "no-store" });
+    render(await r.json());
+  } catch (e) {
+    $("dot").className = "dot bad";
+  } finally {
+    document.body.classList.remove("stale");
+  }
+}
+
+$("refresh").addEventListener("click", poll);
+
+async function flipBackend(name) {
+  try {
+    const r = await fetch("/api/backend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Parla-Control":"1" },
+      body: JSON.stringify({ backend: name }),
+    });
+    const d = await r.json();
+    if (!r.ok) { $("backend-note").textContent = d.error || "flip failed"; return; }
+  } catch (e) { $("backend-note").textContent = "flip failed: " + e; }
+  poll();
+}
+async function command(name) {
+  try { await postJson("/api/command",{command:name}); poll(); }
+  catch(e) { $("runtime-line").textContent=e.message; }
+}
+document.querySelectorAll("[data-cmd]").forEach(b => b.addEventListener("click", () => command(b.dataset.cmd)));
+async function copyResult(key) { try { await navigator.clipboard.writeText(lastResult[key]||""); } catch(e) { $("runtime-line").textContent="Copy unavailable; select the text above."; } }
+$("copy-raw").addEventListener("click", () => copyResult("raw")); $("copy-final").addEventListener("click", () => copyResult("final_text"));
+$("btn-whisper").addEventListener("click", () => flipBackend("whisper"));
+$("btn-parakeet").addEventListener("click", () => flipBackend("parakeet"));
+
+poll();
+setInterval(poll, 5000);
+</script>
+</body>
+</html>
