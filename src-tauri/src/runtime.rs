@@ -45,7 +45,6 @@ pub struct RuntimeState {
     pub error: Option<String>,
     pub device: String,
     pub hook_ready: bool,
-    pub feedback: Option<(String, Instant)>,
     commands: VecDeque<Command>,
 }
 impl RuntimeState {
@@ -69,7 +68,6 @@ impl RuntimeState {
             error: None,
             device: String::new(),
             hook_ready: false,
-            feedback: None,
             commands: VecDeque::new(),
         }
     }
@@ -137,7 +135,7 @@ pub fn snapshot() -> serde_json::Value {
         "queued": s.queued, "processing": s.processing, "effective_settings": s.settings,
         "last_result": s.last, "audio_retry_available": s.audio.is_some(), "error": s.error,
         "device": s.device, "hook_ready": s.hook_ready,
-        "build_id": concat!(env!("CARGO_PKG_VERSION"), "-paste-20260908")
+        "build_id": concat!(env!("CARGO_PKG_VERSION"), "-field-boundary-20260908")
     })
 }
 
@@ -148,8 +146,7 @@ pub fn hud_snapshot() -> serde_json::Value {
     };
     serde_json::json!({"recording":s.recording,"processing":s.processing || s.queued>0,"mode":s.mode,
         "recording_elapsed_ms":s.recording_started.map(|t|t.elapsed().as_millis()).unwrap_or(0),
-        "error":s.error,"feedback":s.feedback.as_ref().filter(|(_, until)| Instant::now() < *until).map(|(text,_)|text),
-        "effective_settings":{"hud_enabled":s.settings.hud_enabled,"toggle_chord":s.settings.toggle_chord}})
+        "error":s.error,"effective_settings":{"hud_enabled":s.settings.hud_enabled,"toggle_chord":s.settings.toggle_chord}})
 }
 
 #[cfg(test)]

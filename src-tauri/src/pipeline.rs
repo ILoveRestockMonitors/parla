@@ -383,7 +383,6 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
                         .into();
                         s.settings = settings.clone();
                         s.error = None;
-                        s.feedback = None;
                     });
                     chime(&settings, audio::beep::ChimeKind::Start);
                     active = Some(Active {
@@ -542,26 +541,7 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
                 );
                 runtime::update(|s| {
                     if done.result.insertion == "recovered" {
-                        s.error = Some(
-                            if done
-                                .result
-                                .error
-                                .as_deref()
-                                .is_some_and(|e| e.starts_with("Clipboard ready"))
-                            {
-                                "Not pasted. Text on clipboard — Ctrl+V".into()
-                            } else {
-                                "Text ready: open Parla and use Copy final".into()
-                            },
-                        );
-                    } else if done.result.insertion == "accepted_unverified" {
-                        s.error = Some("Paste unconfirmed. If text is missing: Ctrl+V".into());
-                    } else if done.result.insertion == "verified" {
-                        s.error = None;
-                        s.feedback = Some((
-                            "Text inserted".into(),
-                            Instant::now() + Duration::from_secs(2),
-                        ));
+                        s.error = Some("Text ready: open Parla and use Copy final".into());
                     }
                     s.last = done.result;
                 });

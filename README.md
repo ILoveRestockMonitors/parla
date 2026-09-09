@@ -12,8 +12,6 @@ If you clone this repository, the source is already extracted. Skip the guide's 
 
 ## Features
 
-Current builds insert through a single clipboard paste. **Each completed dictation replaces your clipboard text and leaves it available for Ctrl+V recovery.** An unconfirmed paste is identified in the HUD; paste manually only if text is missing to avoid duplicates.
-
 - Local recognition through whisper.cpp, with optional Parakeet through a local Python/sherpa-onnx service.
 - **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections.
 - Optional **Polished** cleanup uses a local Ollama model, with validation and fallback when the proposed edit changes protected content.
