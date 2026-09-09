@@ -1,5 +1,16 @@
 # Changes
 
+## 0.2.0-automatic-20260908
+
+- Reverted the clipboard-paste release at the user's request. Automatic Unicode typing is restored. Best-effort clipboard copying remains as an independent backup and cannot block automatic insertion.
+- HUD displays only recording/processing and hides when idle, including when an error remains in the dashboard.
+- Failed/incomplete UI Automation inspection can fall back to a nonzero, unchanged native foreground window and focused control, with no intervening edit/navigation keys or mouse-button presses. A counter tracks input changes without storing keys, text, or pointer positions. Dictation shortcuts, modifier releases and Parla's own injected text are excluded. External automation that types or clicks invalidates the fallback too. Pointer motion and scrolling do not invalidate it.
+- Fallback requires both input hooks to be available, matching counters, and no known conflicting accessibility identity/password flag. Actual field/text changes remain blocked. Unicode batches check for input changes before each send; partial sends are never retried in full.
+- The fallback authorizes insertion only. Restore original and spoken destructive commands still require their existing exact-text verification.
+- Automated coverage includes failed start/end inspections, changed input/focus, unknown monitor state, password refusal, shortcut handling and idle HUD behavior. Native focus plus input continuity is a compatibility fallback, not a proof against an application changing its DOM programmatically while accessibility is unavailable.
+
+Build this version from repository source; the single-file guide's embedded source remains the original reliability snapshot.
+
 ## 0.2.0-field-boundary-20260908
 
 - Clamp accessibility context to the focused editor's DocumentRange. Chromium character movement can escape a contenteditable: a live Discord check reproduced 512 characters before and 160 after a 52-character draft. Unrelated page updates could therefore block insertion and original-text restoration.

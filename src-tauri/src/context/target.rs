@@ -31,11 +31,13 @@ pub struct FieldContext {
 pub struct TargetSnapshot {
     pub hwnd: isize,
     pub focus: isize,
+    pub input_epoch: Option<u64>,
     pub context: FieldContext,
 }
 impl TargetSnapshot {
     pub fn capture(timeout_ms: u64) -> Self {
         let (hwnd, focus) = native_focus();
+        let input_epoch = crate::hotkey::windows::input_epoch();
         let mut context = probe(timeout_ms);
         // A cold/busy accessibility provider may miss the first deadline.
         // Retry observation only; never replace the captured native target.
@@ -46,12 +48,14 @@ impl TargetSnapshot {
             return Self {
                 hwnd: 0,
                 focus: 0,
+                input_epoch,
                 context: FieldContext::default(),
             };
         }
         Self {
             hwnd,
             focus,
+            input_epoch,
             context,
         }
     }
@@ -121,6 +125,9 @@ impl TargetSnapshot {
             let transient = reason == "field inspection timed out or failed"
                 || reason == "field identity temporarily unavailable"
                 || reason == "caret inspection temporarily unavailable";
+            if transient && self.native_fallback_matches(&current) && still_focused() {
+                return Ok(());
+            }
             if attempt == 0 && transient && !self.context.inspection_failed && still_focused() {
                 continue;
             }
@@ -132,6 +139,25 @@ impl TargetSnapshot {
     }
     pub fn native_still_focused(&self) -> bool {
         native_focus() == (self.hwnd, self.focus)
+    }
+    fn native_fallback_matches(&self, other: &Self) -> bool {
+        self.hwnd != 0
+            && self.focus != 0
+            && self.hwnd == other.hwnd
+            && self.focus == other.focus
+            && !self.context.password
+            && !other.context.password
+            && matches!((self.input_epoch, other.input_epoch), (Some(a), Some(b)) if a == b)
+            && match (&self.context.runtime_id, &other.context.runtime_id) {
+                (Some(a), Some(b)) => a == b,
+                _ => true,
+            }
+    }
+    pub fn input_still_unchanged(&self) -> bool {
+        match self.input_epoch {
+            Some(epoch) => crate::hotkey::windows::input_epoch() == Some(epoch),
+            None => true, // No fallback was authorized without the monitor.
+        }
     }
 }
 fn native_focus() -> (isize, isize) {
@@ -327,6 +353,7 @@ unsafe fn select_inner(
     let current = TargetSnapshot {
         hwnd: target.hwnd,
         focus: target.focus,
+        input_epoch: crate::hotkey::windows::input_epoch(),
         context,
     };
     if !target.unchanged(&current) {
@@ -379,6 +406,7 @@ mod tests {
         TargetSnapshot {
             hwnd: 1,
             focus: 2,
+            input_epoch: None,
             context: FieldContext {
                 runtime_id: Some(vec![42]),
                 available: true,
@@ -416,6 +444,45 @@ mod tests {
             .verify_observations(|| observations.next().unwrap(), || true)
             .is_ok());
         assert!(observations.next().is_none());
+    }
+    #[test]
+    fn inspection_failure_can_type_with_stable_native_target_and_input_guard() {
+        let mut a = target();
+        a.input_epoch = Some(7);
+        let mut b = a.clone();
+        b.context = failed_probe();
+        assert!(a.verify_observations(|| b.clone(), || true).is_ok());
+        // The initial inspection may fail too: native focus and input continuity
+        // are independent of the accessibility worker.
+        a.context = failed_probe();
+        assert!(a.verify_observations(|| b.clone(), || true).is_ok());
+        b.context = target().context;
+        assert!(a.verify_observations(|| b.clone(), || true).is_ok());
+    }
+    #[test]
+    fn native_fallback_refuses_activity_focus_password_or_unknown_monitor() {
+        let mut a = target();
+        a.input_epoch = Some(7);
+        let mut b = a.clone();
+        b.context = failed_probe();
+        b.input_epoch = Some(8);
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b.input_epoch = None;
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b.input_epoch = Some(7);
+        b.focus = 3;
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b.focus = a.focus;
+        b.hwnd = 3;
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b.hwnd = a.hwnd;
+        b.context.password = true;
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b.context.password = false;
+        assert!(a.verify_observations(|| b.clone(), || false).is_err());
+        b.context = target().context;
+        b.context.text_before = Some("changed".into());
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
     }
     #[test]
     fn intermittent_caret_availability_recovers() {

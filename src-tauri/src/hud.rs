@@ -14,10 +14,6 @@ pub fn status_label(snapshot: &Value) -> Option<String> {
         .get("processing")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let error = snapshot
-        .get("error")
-        .and_then(Value::as_str)
-        .filter(|s| !s.is_empty());
     if recording {
         let seconds = snapshot
             .get("recording_elapsed_ms")
@@ -42,10 +38,7 @@ pub fn status_label(snapshot: &Value) -> Option<String> {
     if processing {
         return Some("Parla • Processing…".into());
     }
-    error.map(|e| format!("Parla • {}", e.chars().take(sixty()).collect::<String>()))
-}
-fn sixty() -> usize {
-    60
+    None
 }
 
 #[cfg(windows)]
@@ -116,7 +109,7 @@ mod tests {
             status_label(&v).unwrap(),
             "Parla • Recording 01:23 • Ctrl+Space to stop"
         );
-        let idle = serde_json::json!({"recording":false,"processing":false,"effective_settings":{"hud_enabled":true}});
+        let idle = serde_json::json!({"recording":false,"processing":false,"error":"insertion failed","effective_settings":{"hud_enabled":true}});
         assert!(status_label(&idle).is_none());
     }
 }

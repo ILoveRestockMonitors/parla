@@ -37,7 +37,10 @@ fn event(vk: u16, scan: u16, flags: KEYBD_EVENT_FLAGS) -> INPUT {
 fn send_text(target: &TargetSnapshot, text: &str) -> Result<(), String> {
     let units: Vec<u16> = text.encode_utf16().collect();
     for (batch_index, batch) in units.chunks(64).enumerate() {
-        if !target.native_still_focused() || !modifiers_released() {
+        if !target.native_still_focused()
+            || !target.input_still_unchanged()
+            || !modifiers_released()
+        {
             return Err(format!(
                 "insertion interrupted after at most {} UTF-16 units; recovered text is available",
                 batch_index * 64
@@ -58,6 +61,16 @@ fn send_text(target: &TargetSnapshot, text: &str) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Make the candidate available for manual recovery while leaving automatic
+/// Unicode insertion independent of clipboard availability.
+fn copy_candidate_to_clipboard(text: &str) {
+    let Ok(mut clipboard) = arboard::Clipboard::new() else {
+        return;
+    };
+    let _ = clipboard.set_text(text.to_owned());
+}
+
 fn verify_receipt(before: &TargetSnapshot, after: &TargetSnapshot, text: &str) -> bool {
     if !before.same_field(after)
         || !before.context.available
@@ -88,8 +101,14 @@ fn commit_locked(target: &TargetSnapshot, text: &str) -> Result<CommitReceipt, S
     if text.is_empty() || text.len() > 256 * 1024 {
         return Err("empty or oversized candidate".into());
     }
+    // Preserve the normal commit text for recovery, but never let a locked or
+    // unavailable clipboard prevent the original automatic insertion path.
+    copy_candidate_to_clipboard(text);
     if !modifiers_released() {
-        return Err("dictation shortcut or modifier still held; text saved for recovery — use Copy final".into());
+        return Err(
+            "dictation shortcut or modifier still held; text saved for recovery — use Copy final"
+                .into(),
+        );
     }
     target.verify_for_insertion(150)?;
     send_text(target, text)?;
@@ -167,6 +186,7 @@ mod tests {
         let before = TargetSnapshot {
             hwnd: 1,
             focus: 2,
+            input_epoch: None,
             context: FieldContext {
                 available: true,
                 text_before: Some("Before ".into()),

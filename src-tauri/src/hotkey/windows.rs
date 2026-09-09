@@ -19,6 +19,7 @@
 use super::{HotkeyManager, TriggerEvent, WindowsLlHook};
 use crate::store::settings::{default_chord, HotkeyChord};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
@@ -26,6 +27,31 @@ use windows::Win32::UI::WindowsAndMessaging::{KBDLLHOOKSTRUCT, WH_KEYBOARD_LL};
 
 static EVENTS: OnceLock<Mutex<Vec<(TriggerEvent, Instant)>>> = OnceLock::new();
 static HOOK: Mutex<usize> = Mutex::new(0);
+static MOUSE_HOOK: Mutex<usize> = Mutex::new(0);
+static INPUT_EPOCH: AtomicU64 = AtomicU64::new(0);
+static INPUT_MONITOR_READY: AtomicBool = AtomicBool::new(false);
+
+/// No key contents are retained. Only an invalidation counter for changes
+/// that can move/edit the user's target while accessibility is unavailable.
+pub fn input_epoch() -> Option<u64> {
+    INPUT_MONITOR_READY
+        .load(Ordering::Acquire)
+        .then(|| INPUT_EPOCH.load(Ordering::Acquire))
+}
+fn key_changes_target(vk: u32, down: bool, swallowed: bool, own_input: bool) -> bool {
+    down && !swallowed && !own_input && !matches!(vk, 0x10..=0x12 | 0x5B..=0x5C | 0xA0..=0xA5)
+}
+unsafe extern "system" fn mouse_hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if code >= 0 && mouse_changes_target(wparam.0) {
+        INPUT_EPOCH.fetch_add(1, Ordering::AcqRel);
+    }
+    windows::Win32::UI::WindowsAndMessaging::CallNextHookEx(None, code, wparam, lparam)
+}
+fn mouse_changes_target(message: usize) -> bool {
+    // Count external injected clicks too: those can change the field. Pointer
+    // movement and scrolling alone do not invalidate a stationary caret.
+    matches!(message, 0x0201 | 0x0204 | 0x0207 | 0x020B)
+}
 static STATE: Mutex<Option<HookState>> = Mutex::new(None);
 
 struct HookState {
@@ -193,6 +219,14 @@ unsafe extern "system" fn ll_hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM
             }
             // Poisoned mutex => fail OPEN: forward to the system rather than
             // eat someone's keys.
+            if key_changes_target(
+                vk,
+                down,
+                !forward_with_default,
+                kb.dwExtraInfo == 0x5041524c && kb.flags.0 & 0x10 != 0,
+            ) {
+                INPUT_EPOCH.fetch_add(1, Ordering::AcqRel);
+            }
             if !forward_with_default {
                 return LRESULT(1); // swallowed
             }
@@ -236,6 +270,20 @@ impl HotkeyManager for WindowsLlHook {
         let hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(ll_hook_proc), None, 0) }
             .map_err(|e| format!("SetWindowsHookExW failed: {e}"))?;
         *HOOK.lock().map_err(|_| "hook mutex poisoned")? = hook.0 as usize;
+        let mouse = unsafe {
+            SetWindowsHookExW(
+                windows::Win32::UI::WindowsAndMessaging::WH_MOUSE_LL,
+                Some(mouse_hook_proc),
+                None,
+                0,
+            )
+        };
+        if let Ok(mouse) = mouse {
+            if let Ok(mut slot) = MOUSE_HOOK.lock() {
+                *slot = mouse.0 as usize;
+                INPUT_MONITOR_READY.store(true, Ordering::Release);
+            }
+        }
         // NOTE: a live LL hook needs a message pump on its installing thread.
         // main.rs spawns this module's thread with a GetMessageW pump.
         self.installed = true;
@@ -244,6 +292,17 @@ impl HotkeyManager for WindowsLlHook {
 
     fn stop(&mut self) {
         use windows::Win32::UI::WindowsAndMessaging::UnhookWindowsHookEx;
+        INPUT_MONITOR_READY.store(false, Ordering::Release);
+        if let Ok(mut mouse) = MOUSE_HOOK.lock() {
+            if *mouse != 0 {
+                unsafe {
+                    let _ = UnhookWindowsHookEx(windows::Win32::UI::WindowsAndMessaging::HHOOK(
+                        *mouse as isize,
+                    ));
+                }
+                *mouse = 0;
+            }
+        }
         let hook = HOOK.lock().map(|g| *g).unwrap_or(0);
         if hook != 0 {
             unsafe {
@@ -270,6 +329,25 @@ mod tests {
     const VK_LWIN: u32 = 0x5B;
     const VK_RCTRL: u32 = 0xA3;
     const VK_A: u32 = 0x41; // bystander letter
+
+    #[test]
+    fn input_guard_ignores_dictation_gestures_but_counts_edits() {
+        for vk in [0x11, 0xA2, 0xA3, 0x5B, 0x5C] {
+            assert!(!key_changes_target(vk, true, false, false));
+            assert!(!key_changes_target(vk, false, false, false));
+        }
+        assert!(!key_changes_target(0x20, true, true, false)); // swallowed toggle
+        assert!(key_changes_target(0x20, true, false, false)); // ordinary space
+        assert!(key_changes_target(VK_A, true, false, false));
+        assert!(key_changes_target(0x25, true, false, false)); // caret left
+        assert!(!key_changes_target(0xE7, true, false, true)); // own Unicode input
+        assert!(key_changes_target(0xE7, true, false, false)); // external automation
+        assert!(!mouse_changes_target(0x0200)); // movement alone is fine
+        assert!(!mouse_changes_target(0x020A));
+        for message in [0x0201, 0x0204, 0x0207, 0x020B] {
+            assert!(mouse_changes_target(message));
+        }
+    }
 
     fn machine(chords: &[&str]) -> HookState {
         HookState {

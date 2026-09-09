@@ -12,6 +12,8 @@ If you clone this repository, the source is already extracted. Skip the guide's 
 
 ## Features
 
+Automatic insertion uses Unicode typing. Each completed dictation also copies its text to the clipboard as a backup; a busy clipboard does not block typing. The HUD shows recording/processing and disappears when idle. A failed accessibility check can use the same native field when the input monitor confirms no intervening typing or clicks; verified restore operations still require exact text checks.
+
 - Local recognition through whisper.cpp, with optional Parakeet through a local Python/sherpa-onnx service.
 - **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections.
 - Optional **Polished** cleanup uses a local Ollama model, with validation and fallback when the proposed edit changes protected content.
