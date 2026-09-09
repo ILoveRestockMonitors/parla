@@ -4,6 +4,8 @@ Parla is a Windows x64 speech-to-text app inspired by Whisperflow. Press **Ctrl+
 
 ## Start here
 
+See [Changes](CHANGELOG.md) for the current insertion reliability patch and the distinction between this source and the guide's original embedded snapshot.
+
 **[Complete shareable build guide](PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md)** — detailed prerequisites, exact commands, architecture, implementation contracts, troubleshooting, tests, installation, and rollback. The guide also contains a checksummed source snapshot and a Python extractor, so the single Markdown file can be shared independently of this repository.
 
 If you clone this repository, the source is already extracted. Skip the guide's extraction step and use the repository root for its build commands. The guide's appendix is a frozen snapshot; this README adds the repository introduction.

@@ -88,9 +88,10 @@ fn commit_locked(target: &TargetSnapshot, text: &str) -> Result<CommitReceipt, S
     if text.is_empty() || text.len() > 256 * 1024 {
         return Err("empty or oversized candidate".into());
     }
-    if !modifiers_released() || !target.matches_current(150) {
-        return Err("target field or caret changed; text saved for recovery".into());
+    if !modifiers_released() {
+        return Err("dictation shortcut or modifier still held; text saved for recovery — use Copy final".into());
     }
+    target.verify_for_insertion(150)?;
     send_text(target, text)?;
     let mut after = TargetSnapshot::capture(100);
     let mut verified = verify_receipt(target, &after, text);

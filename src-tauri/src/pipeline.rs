@@ -540,6 +540,9 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
                     done.job.queued_at.elapsed().as_millis() + done.job.finalize_ms
                 );
                 runtime::update(|s| {
+                    if done.result.insertion == "recovered" {
+                        s.error = Some("Text ready: open Parla and use Copy final".into());
+                    }
                     s.last = done.result;
                 });
             }
