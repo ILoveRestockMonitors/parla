@@ -1,7 +1,7 @@
 param(
     [string]$ReleaseDirectory='',
     [ValidateSet('Prepare','Activate','Rollback')][string]$Action='Prepare',
-    [string]$Version='0.2.0-field-boundary-20260908'
+    [string]$Version='0.2.0-paste-20260908'
 )
 $ErrorActionPreference='Stop'
 if($Version -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'){throw 'Invalid version'}

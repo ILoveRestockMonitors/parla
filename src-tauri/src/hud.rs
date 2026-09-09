@@ -42,7 +42,9 @@ pub fn status_label(snapshot: &Value) -> Option<String> {
     if processing {
         return Some("Parla • Processing…".into());
     }
-    error.map(|e| format!("Parla • {}", e.chars().take(sixty()).collect::<String>()))
+    error
+        .or_else(|| snapshot.get("feedback").and_then(Value::as_str))
+        .map(|e| format!("Parla • {}", e.chars().take(sixty()).collect::<String>()))
 }
 fn sixty() -> usize {
     60
@@ -118,5 +120,14 @@ mod tests {
         );
         let idle = serde_json::json!({"recording":false,"processing":false,"effective_settings":{"hud_enabled":true}});
         assert!(status_label(&idle).is_none());
+    }
+    #[test]
+    fn outcome_feedback_does_not_hide_recovery() {
+        let mut s = serde_json::json!({"effective_settings":{"hud_enabled":true},"feedback":"Text inserted"});
+        assert_eq!(status_label(&s).as_deref(), Some("Parla • Text inserted"));
+        s["error"] = serde_json::json!("Paste unconfirmed. If text is missing: Ctrl+V");
+        assert!(status_label(&s).unwrap().contains("Paste unconfirmed"));
+        s["recording"] = serde_json::json!(true);
+        assert!(status_label(&s).unwrap().contains("Recording"));
     }
 }

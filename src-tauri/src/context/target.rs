@@ -58,7 +58,7 @@ impl TargetSnapshot {
     pub fn same_field(&self, other: &Self) -> bool {
         self.hwnd != 0
             && self.hwnd == other.hwnd
-            && self.focus == other.focus
+            && (self.focus == other.focus || self.same_accessible_control(other))
             && !self.context.password
             && !other.context.password
             && match (&self.context.runtime_id, &other.context.runtime_id) {
@@ -66,6 +66,12 @@ impl TargetSnapshot {
                 (None, None) => true,
                 _ => false,
             }
+    }
+    fn same_accessible_control(&self, other: &Self) -> bool {
+        matches!((&self.context.runtime_id, &other.context.runtime_id),
+            (Some(a), Some(b)) if !a.is_empty() && a == b)
+            && !self.context.inspection_failed
+            && !other.context.inspection_failed
     }
     pub fn unchanged(&self, other: &Self) -> bool {
         self.same_field(other)
@@ -81,7 +87,10 @@ impl TargetSnapshot {
         self.unchanged(&Self::capture(timeout_ms))
     }
     pub fn insertion_mismatch(&self, other: &Self) -> Option<&'static str> {
-        if self.hwnd == 0 || self.hwnd != other.hwnd || self.focus != other.focus {
+        if self.hwnd == 0
+            || self.hwnd != other.hwnd
+            || (self.focus != other.focus && !self.same_accessible_control(other))
+        {
             return Some("target window or control changed");
         }
         if self.context.password || other.context.password {
@@ -105,18 +114,18 @@ impl TargetSnapshot {
         }
         None
     }
-    pub fn verify_for_insertion(&self, timeout_ms: u64) -> Result<(), String> {
+    pub fn verify_for_insertion(&self, timeout_ms: u64) -> Result<Self, String> {
         self.verify_observations(|| Self::capture(timeout_ms), || self.native_still_focused())
     }
     fn verify_observations(
         &self,
         mut observe: impl FnMut() -> Self,
         still_focused: impl Fn() -> bool,
-    ) -> Result<(), String> {
+    ) -> Result<Self, String> {
         for attempt in 0..2 {
             let current = observe();
             let Some(reason) = self.insertion_mismatch(&current) else {
-                return Ok(());
+                return Ok(current);
             };
             let transient = reason == "field inspection timed out or failed"
                 || reason == "field identity temporarily unavailable"
@@ -416,6 +425,27 @@ mod tests {
             .verify_observations(|| observations.next().unwrap(), || true)
             .is_ok());
         assert!(observations.next().is_none());
+    }
+    #[test]
+    fn native_child_change_requires_same_accessible_editor_and_text() {
+        let a = target();
+        let mut b = a.clone();
+        b.focus = 77;
+        let current = a.verify_observations(|| b.clone(), || true).unwrap();
+        assert_eq!(current.focus, 77);
+        b.context.runtime_id = Some(vec![99]);
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b = a.clone();
+        b.focus = 77;
+        b.context.text_before = Some("edited".into());
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b = a.clone();
+        b.hwnd = 99;
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
+        b = a.clone();
+        b.focus = 77;
+        b.context.runtime_id = None;
+        assert!(a.verify_observations(|| b.clone(), || true).is_err());
     }
     #[test]
     fn intermittent_caret_availability_recovers() {

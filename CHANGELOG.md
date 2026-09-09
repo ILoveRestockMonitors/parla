@@ -1,5 +1,15 @@
 # Changes
 
+## 0.2.0-paste-20260908
+
+- Insert dictation with one Ctrl+V gesture instead of a burst of per-character Unicode key events. Never automatically resend an unconfirmed paste. Partial shortcut delivery releases synthetic keys without repeating the paste.
+- Completed dictation deliberately replaces and remains on the Windows clipboard, including when target checks block insertion. This enables immediate manual Ctrl+V recovery. Clipboard write failures remain visible, and clipboard sequence checks reject a changed payload before input.
+- Permit a changed native child focus handle only when the same nonempty accessibility runtime ID identifies the same editor, in the same foreground window, with unchanged field text. Rebind the final native focus check to that verified current snapshot. Real field/window/text changes are still rejected.
+- HUD distinguishes verified insertion, unconfirmed paste, and blocked insertion with clipboard recovery. Unconfirmed insertion is not reported as verified success. Allow bounded additional read-back time for asynchronous editors.
+- Automated tests cover native child-handle changes versus real editor changes and feedback priority. This release changes the delivery mechanism; automated checks do not establish universal application compatibility.
+
+Use repository source for this version; the standalone Markdown appendix remains a frozen earlier snapshot.
+
 ## 0.2.0-field-boundary-20260908
 
 - Clamp accessibility context to the focused editor's DocumentRange. Chromium character movement can escape a contenteditable: a live Discord check reproduced 512 characters before and 160 after a 52-character draft. Unrelated page updates could therefore block insertion and original-text restoration.
