@@ -1,5 +1,14 @@
 # Changes
 
+## 0.2.0-field-boundary-20260908
+
+- Clamp accessibility context to the focused editor's DocumentRange. Chromium character movement can escape a contenteditable: a live Discord check reproduced 512 characters before and 160 after a 52-character draft. Unrelated page updates could therefore block insertion and original-text restoration.
+- Reject selections outside the editor. Restoration range selection is also confined to the editor, with existing exact-text and field-identity checks preserved.
+- A read-only Rust integration test reproduced the escaping ranges in Discord, then verified the production clamp retained the complete draft and unchanged caret endpoints. No draft was modified or sent.
+- Reproduce manually with a verified window containing one short editable draft: set `PARLA_TEST_HWND` to its native handle and `PARLA_EXPECT_ESCAPE=1`, then run `cargo test live_editor_ranges_stay_inside_field -- --ignored --nocapture`. The test prints no draft text. The optional `tests/field-boundary.html` fixture changes text outside a stable editor; browser fixture execution was not available during this validation.
+
+Build this version from repository source. The standalone guide still embeds the original reliability snapshot; substitute this version in explicit installation paths. The previous insertion patch addressed incomplete inspection, not this confirmed field-boundary bug.
+
 ## 0.2.0-insertion-20260908
 
 - Retry a failed accessibility observation once while the original native target remains focused. Retry transient pre-insertion identity/caret availability mismatches without authorizing a different target.

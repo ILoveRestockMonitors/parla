@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Parla isolated field boundary test</title>
+<style>body{font:20px system-ui;padding:40px} [contenteditable]{border:2px solid;padding:20px;margin:20px 0}</style>
+<h1>Parla isolated field boundary test</h1>
+<p id="before">Outside editor before</p>
+<div role="textbox" aria-label="Regression editor" contenteditable="true">Stable draft</div>
+<p id="after">Outside editor after</p>
+<p>External text changes continuously. The draft and caret should remain stable.</p>
+<script>
+let tick=0;
+setInterval(()=>{
+document.getElementById('before').textContent='Outside editor before '+(++tick);
+document.getElementById('after').textContent='Outside editor after '+tick;
+},100);
+</script>

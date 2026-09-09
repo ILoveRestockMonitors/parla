@@ -9,8 +9,9 @@ use windows::Win32::System::Ole::{
     SafeArrayDestroy, SafeArrayGetElement, SafeArrayGetLBound, SafeArrayGetUBound,
 };
 use windows::Win32::UI::Accessibility::{
-    CUIAutomation, IUIAutomation, IUIAutomationTextPattern, TextPatternRangeEndpoint_End as End,
-    TextPatternRangeEndpoint_Start as Start, TextUnit_Character, UIA_TextPatternId,
+    CUIAutomation, IUIAutomation, IUIAutomationTextPattern, IUIAutomationTextRange,
+    TextPatternRangeEndpoint_End as End, TextPatternRangeEndpoint_Start as Start,
+    TextUnit_Character, UIA_TextPatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO,
@@ -255,6 +256,13 @@ unsafe fn probe_inner(automation: &IUIAutomation) -> windows::core::Result<Field
         return Ok(result);
     }
     let range = selection.GetElement(0)?;
+    // Chromium ranges can move outside a contenteditable even when the text
+    // pattern belongs to that editor. Compare only the editor's own text:
+    // changing messages, attachment labels and typing indicators are not edits.
+    let document = pattern.DocumentRange()?;
+    if !range_within(&range, &document)? {
+        return Ok(failed_probe());
+    }
     let selected = range.GetText(65537)?.to_string();
     if selected.len() > 65536 {
         return Ok(result);
@@ -263,13 +271,34 @@ unsafe fn probe_inner(automation: &IUIAutomation) -> windows::core::Result<Field
     let before = range.Clone()?;
     before.MoveEndpointByRange(End, &range, Start)?;
     before.MoveEndpointByUnit(Start, TextUnit_Character, -512)?;
+    clamp_to_document(&before, &document)?;
     result.text_before = Some(before.GetText(2048)?.to_string());
     let after = range.Clone()?;
     after.MoveEndpointByRange(Start, &range, End)?;
     after.MoveEndpointByUnit(End, TextUnit_Character, 160)?;
+    clamp_to_document(&after, &document)?;
     result.text_after = Some(after.GetText(640)?.to_string());
     result.available = true;
     Ok(result)
+}
+unsafe fn range_within(
+    range: &IUIAutomationTextRange,
+    document: &IUIAutomationTextRange,
+) -> windows::core::Result<bool> {
+    Ok(range.CompareEndpoints(Start, document, Start)? >= 0
+        && range.CompareEndpoints(End, document, End)? <= 0)
+}
+unsafe fn clamp_to_document(
+    range: &IUIAutomationTextRange,
+    document: &IUIAutomationTextRange,
+) -> windows::core::Result<()> {
+    if range.CompareEndpoints(Start, document, Start)? < 0 {
+        range.MoveEndpointByRange(Start, document, Start)?;
+    }
+    if range.CompareEndpoints(End, document, End)? > 0 {
+        range.MoveEndpointByRange(End, document, End)?;
+    }
+    Ok(())
 }
 pub fn select_inserted_text(target: &TargetSnapshot, text: &str) -> Result<(), String> {
     let timeout = Duration::from_millis(400);
@@ -311,6 +340,10 @@ unsafe fn select_inner(
         .GetSelection()
         .and_then(|a| a.GetElement(0))
         .map_err(|e| e.to_string())?;
+    let document = pattern.DocumentRange().map_err(|e| e.to_string())?;
+    if !range_within(&range, &document).map_err(|e| e.to_string())? {
+        return Err("selection is outside the original editor".into());
+    }
     if !range.GetText(1).map_err(|e| e.to_string())?.is_empty() {
         return Err("selection changed".into());
     }
@@ -326,6 +359,9 @@ unsafe fn select_inner(
         trial
             .MoveEndpointByUnit(Start, TextUnit_Character, -count)
             .map_err(|e| e.to_string())?;
+        if !range_within(&trial, &document).map_err(|e| e.to_string())? {
+            continue;
+        }
         if trial.GetText(-1).map_err(|e| e.to_string())?.to_string() != text {
             continue;
         }
@@ -441,6 +477,82 @@ mod tests {
             eprintln!("field check: {:?}; initial available={}, failed={}; current available={}, failed={}",
                 first.insertion_mismatch(&next), first.context.available, first.context.inspection_failed,
                 next.context.available, next.context.inspection_failed);
+        }
+    }
+    #[test]
+    #[ignore = "read-only live editor range regression; set PARLA_TEST_HWND to a verified window handle"]
+    fn live_editor_ranges_stay_inside_field() {
+        unsafe {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::Accessibility::{
+                TreeScope_Descendants, UIA_ControlTypePropertyId, UIA_EditControlTypeId,
+            };
+            let hwnd: isize = std::env::var("PARLA_TEST_HWND").unwrap().parse().unwrap();
+            CoInitializeEx(None, COINIT_MULTITHREADED).unwrap();
+            let automation: IUIAutomation =
+                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).unwrap();
+            let root = automation.ElementFromHandle(HWND(hwnd)).unwrap();
+            let condition = automation
+                .CreatePropertyCondition(
+                    UIA_ControlTypePropertyId,
+                    &windows::core::VARIANT::from(UIA_EditControlTypeId.0),
+                )
+                .unwrap();
+            let edits = root.FindAll(TreeScope_Descendants, &condition).unwrap();
+            assert_eq!(
+                edits.Length().unwrap(),
+                1,
+                "select a window with exactly one editable control"
+            );
+            let edit = edits.GetElement(0).unwrap();
+            assert!(!edit.CurrentIsPassword().unwrap().as_bool());
+            let pattern: IUIAutomationTextPattern =
+                edit.GetCurrentPatternAs(UIA_TextPatternId).unwrap();
+            let document = pattern.DocumentRange().unwrap();
+            let selection = pattern.GetSelection().unwrap();
+            assert_eq!(selection.Length().unwrap(), 1);
+            let caret = selection.GetElement(0).unwrap();
+            assert!(range_within(&caret, &document).unwrap());
+            let before = caret.Clone().unwrap();
+            before.MoveEndpointByRange(End, &caret, Start).unwrap();
+            before
+                .MoveEndpointByUnit(Start, TextUnit_Character, -512)
+                .unwrap();
+            let after = caret.Clone().unwrap();
+            after.MoveEndpointByRange(Start, &caret, End).unwrap();
+            after
+                .MoveEndpointByUnit(End, TextUnit_Character, 160)
+                .unwrap();
+            let escaped = !range_within(&before, &document).unwrap()
+                || !range_within(&after, &document).unwrap();
+            eprintln!("Old ranges escaped field: {escaped}");
+            if std::env::var_os("PARLA_EXPECT_ESCAPE").is_some() {
+                assert!(escaped, "fixture did not reproduce the original bug");
+            }
+            clamp_to_document(&before, &document).unwrap();
+            clamp_to_document(&after, &document).unwrap();
+            assert!(range_within(&before, &document).unwrap());
+            assert!(range_within(&after, &document).unwrap());
+            assert_eq!(before.CompareEndpoints(End, &caret, Start).unwrap(), 0);
+            assert_eq!(after.CompareEndpoints(Start, &caret, End).unwrap(), 0);
+            // Reconstruct the field for this short-draft regression. This tests
+            // no draft text was dropped and no surrounding page text was read.
+            let whole = document.GetText(4096).unwrap().to_string();
+            assert!(
+                whole.chars().count() < 160,
+                "use a short draft for this test"
+            );
+            let combined = format!(
+                "{}{}{}",
+                before.GetText(4096).unwrap(),
+                caret.GetText(4096).unwrap(),
+                after.GetText(4096).unwrap()
+            );
+            assert!(
+                combined == whole,
+                "bounded context did not reconstruct the draft"
+            );
+            eprintln!("Bounded ranges retain the complete draft and preserve caret endpoints.");
         }
     }
 }
