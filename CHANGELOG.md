@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-16 — documentation and workspace reconciliation
+
+- Identify this repository as the authoritative maintained source and document the current `0.2.0-browser-prose-20260915` release, all shipped features, architecture, and remaining review findings.
+- Update the README to the current 116-passing-test result, distinguish the guide's older 85-test snapshot, and clarify Faithful formatting and best-effort clipboard backup.
+- Add the architecture assessment, including corrections for older source copies and existing insertion safeguards. Its proposed improvements are not claimed as completed work.
+- Label the embedded guide as a historical baseline. No application behavior changed and no new executable release was created for this documentation update.
+
 ## 0.2.0-browser-prose-20260915
 
 - Default browser dictation to single-line prose. Skip automatic bullet layout in browser processes while retaining optional polishing and numeric entry. Codex and other writing apps keep automatic lists.

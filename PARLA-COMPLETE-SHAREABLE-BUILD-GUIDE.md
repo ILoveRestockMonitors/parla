@@ -1,5 +1,7 @@
 # Parla: complete, shareable Windows dictation build guide
 
+> **Historical embedded baseline:** the source appendix remains `0.2.0-reliability-20260908`. For the current app, build this repository directly using [README.md](README.md) and read [Current state](docs/current-state.md). Do not extract this older appendix over the current source. Use the release version emitted by the current build script when installing.
+
 **Edition:** 2026-09-08 · **Application baseline:** `0.2.0-reliability-20260908` · **Target:** Windows x64.
 
 This one Markdown file contains the consolidated specification, exact build steps, architecture, tests, troubleshooting, future roadmap, and the application source. Give the **entire file as a file attachment** to another person or coding agent. No access to the original author's computer, private project, conversation, or other Markdown documents is required. Rust/Python/compiler installations and speech-model downloads are external prerequisites; their installers, binaries and weights are not embedded.

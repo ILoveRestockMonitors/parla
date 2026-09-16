@@ -4,18 +4,18 @@ Parla is a Windows x64 speech-to-text app inspired by Whisperflow. Press **Ctrl+
 
 ## Start here
 
-See [Changes](CHANGELOG.md) for the current insertion reliability patch and the distinction between this source and the guide's original embedded snapshot.
+**Current release: `0.2.0-browser-prose-20260915`; source and documentation checked September 16, 2026.** Read [Current state](docs/current-state.md) for the implemented features, test results, and remaining gaps, and [Changes](CHANGELOG.md) for the shipped updates. This repository is the authoritative maintained source.
 
 **[Complete shareable build guide](PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md)** — detailed prerequisites, exact commands, architecture, implementation contracts, troubleshooting, tests, installation, and rollback. The guide also contains a checksummed source snapshot and a Python extractor, so the single Markdown file can be shared independently of this repository.
 
-If you clone this repository, the source is already extracted. Skip the guide's extraction step and use the repository root for its build commands. The guide's appendix is a frozen snapshot; this README adds the repository introduction.
+If you clone this repository, skip the guide's extraction step and build the repository directly. The guide's appendix is a frozen September 8 snapshot; it does not include the later insertion, numeric, list, browser, and feedback updates. Use the version emitted by the current build script in installation commands instead of the guide's older release label.
 
 ## Features
 
-Automatic insertion uses Unicode typing. Each completed dictation also copies its text to the clipboard as a backup; a busy clipboard does not block typing. The HUD shows recording/processing and disappears when idle. A failed accessibility check can use the same native field when the input monitor confirms no intervening typing or clicks; verified restore operations still require exact text checks.
+Automatic insertion uses Unicode typing. Before an ordinary insertion attempt, Parla also makes a best-effort clipboard copy; a busy clipboard does not block typing. The HUD shows recording/processing and disappears when idle. A failed accessibility check can use the same native field when the input monitor confirms no intervening typing or clicks; verified restore operations still require exact text checks.
 
 - Local recognition through whisper.cpp, with optional Parakeet through a local Python/sherpa-onnx service.
-- **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections.
+- **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections and the automatic numeric/list behavior described below.
 - Clear lists automatically become separate bullet lines in writing apps such as Codex, in both cleanup modes. Say "I need eggs, milk, bread, and cheese pizza" or "First, call Alex. Second, review the quote." Introductions stay above the list; multiword items stay together. Natural pauses help recognition add item separators. Unclear boundaries stay as spoken text, and code editors keep ordinary dictation.
 - Browser dictation defaults to normal sentences on one line, including address/search bars and page editors. Chrome, Edge, Firefox, Brave, Opera, Vivaldi and other recognized browsers receive text without Enter or Shift+Enter, so dictation does not submit searches or navigate between list items. Recovered or polished multiline text is flattened before typing; numeric entry still works normally. You submit the text yourself.
 - Number-only dictation is automatic in both cleanup modes: "one five four" becomes `154`; "sixty seven two four zero nine eight" becomes `6724098`; "sixty-nine thousand four hundred twenty" becomes `69420`. Natural number phrases are combined before joining adjacent chunks. Leading zeros and existing numeric groups are preserved. Ordinary sentences stay on the normal cleanup path. Digit entries have no trailing space; signs, decimals and ambiguous homophones are left alone.
@@ -54,10 +54,12 @@ This first-run script refuses to overwrite existing settings. Follow the guide's
 | `src-tauri/assets/parakeet-shim.py` | Optional local Parakeet service |
 | `scripts` | Build, first-run settings, installation, and rollback helpers |
 | `tests` | Python integration checks and manual application compatibility matrix |
+| `docs/current-state.md` | Current release, architecture, verification, and known gaps |
+| `docs/architecture-review-2026-09-16.md` | Source-grounded architecture assessment and follow-up recommendations |
 | `PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md` | Standalone build specification and embedded source snapshot |
 
 ## Verification and limitations
 
-The source snapshot was locally verified with 85 passing Rust tests, five passing shim HTTP tests, three passing CLI smoke tests, an optimized Windows GNU build, and installer/rollback checks. The guide records the scope and limitations of that verification. These results do not guarantee recognition accuracy or compatibility with every editor; real microphone, model, and target-application checks remain necessary.
+The current source passed **116 Rust tests (0 failed, 3 opt-in live tests ignored)** and **five controlled shim HTTP tests** on September 16, 2026. The September 15 release also passed three CLI smoke checks and an optimized Windows GNU build. The guide's 85-test result refers to its older embedded baseline. See [Current state](docs/current-state.md) for verification scope and the distinction between code checks and live application behavior. These results do not guarantee recognition accuracy or compatibility with every editor.
 
 Local processing still creates local data according to your settings. Review history and retry-audio settings in the guide. Model weights, executables, personal settings, databases, recordings, and operational logs are excluded from this repository. Download third-party dependencies and models separately under their respective terms.
