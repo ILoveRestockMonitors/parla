@@ -56,8 +56,31 @@ pub fn tail_chars(s: &str, max: usize) -> String {
     }
 }
 
+/// Browser-wide insertion policy, independent of the formatter's categories.
+/// Match image basenames so Electron apps such as Codex remain writing apps.
+pub fn is_browser_exe(exe: &str) -> bool {
+    let name = exe.rsplit(['\\', '/']).next().unwrap_or(exe);
+    [
+        "chrome.exe",
+        "msedge.exe",
+        "firefox.exe",
+        "brave.exe",
+        "opera.exe",
+        "vivaldi.exe",
+        "chromium.exe",
+        "arc.exe",
+        "zen.exe",
+        "waterfox.exe",
+        "floorp.exe",
+        "librewolf.exe",
+        "iexplore.exe",
+    ]
+    .iter()
+    .any(|browser| name.eq_ignore_ascii_case(browser))
+}
+
 /// Map an executable name (lowercase ok) to a spec §7.2 app_category.
-/// Browser tabs are unknowable without UIA - they land on "other".
+/// Browsers retain "other" in the formatter envelope; layout is handled separately.
 pub fn category_for_exe(exe: &str) -> &'static str {
     let e = exe.to_ascii_lowercase();
 
@@ -126,6 +149,39 @@ pub fn category_for_exe(exe: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{apply_seam, category_for_exe as cat, seam_mode_for, SeamMode};
+
+    #[test]
+    fn browser_policy_matches_exact_image_names_and_paths() {
+        for exe in [
+            "chrome.exe",
+            "MSEDGE.EXE",
+            "firefox.exe",
+            "brave.exe",
+            "opera.exe",
+            "vivaldi.exe",
+            "chromium.exe",
+            "Arc.exe",
+            "zen.exe",
+            "waterfox.exe",
+            "floorp.exe",
+            "librewolf.exe",
+            "iexplore.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            "C:/Program Files/Mozilla Firefox/firefox.exe",
+        ] {
+            assert!(super::is_browser_exe(exe), "{exe}");
+        }
+        for exe in [
+            "Codex.exe",
+            "Code.exe",
+            "electron.exe",
+            "notchrome.exe",
+            "",
+            r"C:\chrome.exe\Codex.exe",
+        ] {
+            assert!(!super::is_browser_exe(exe), "{exe}");
+        }
+    }
 
     #[test]
     fn seam_rules() {

@@ -190,6 +190,15 @@ fn commit_locked(target: &TargetSnapshot, text: &str) -> Result<CommitReceipt, S
     if text.is_empty() || text.len() > 256 * 1024 {
         return Err("empty or oversized candidate".into());
     }
+    // Re-resolve the captured target for retries, restore and spoken commands.
+    // Browsers must never receive Enter chords, including Shift+Enter. If the
+    // process cannot be identified, conservatively flatten this insertion too.
+    let app = crate::context::windows::exe_for_window(target.hwnd);
+    let payload = match app.as_deref() {
+        Some(exe) => crate::formatter::layout::for_app(text, Some(exe)),
+        None => crate::formatter::layout::single_line(text),
+    };
+    let text = payload.as_ref();
     // Preserve the normal commit text for recovery, but never let a locked or
     // unavailable clipboard prevent the original automatic insertion path.
     copy_candidate_to_clipboard(text);
@@ -270,6 +279,40 @@ pub fn replace(
 mod tests {
     use super::*;
     use crate::context::target::FieldContext;
+
+    #[test]
+    fn browser_grocery_input_contains_text_only_and_no_enter_events() {
+        for app in ["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe"] {
+            for source in [
+                "I need these in order: Cheese pizza, eggs, broccoli, potatoes.",
+                "I need these in order:\n• Cheese pizza\n• Eggs\n• Broccoli\n• Potatoes",
+                "Cheese pizza\r\neggs\rbroccoli\tpotatoes\u{2028}🛒",
+            ] {
+                let payload = crate::formatter::layout::for_app(source, Some(app));
+                let mut output = Vec::new();
+                for step in text_steps(&payload) {
+                    assert!(matches!(step, TextStep::Unicode(_)));
+                    send_step(&step, |events| {
+                        for input in events {
+                            let key = unsafe { input.Anonymous.ki };
+                            assert_eq!(key.wVk.0, 0, "browser received a shortcut key");
+                            assert!(key.dwFlags.contains(KEYEVENTF_UNICODE));
+                            assert!(![9, 10, 13, 0x85, 0x2028, 0x2029].contains(&key.wScan));
+                            if !key.dwFlags.contains(KEYEVENTF_KEYUP) {
+                                output.push(key.wScan);
+                            }
+                        }
+                        events.len() as u32
+                    })
+                    .unwrap();
+                }
+                assert_eq!(String::from_utf16(&output).unwrap(), payload);
+                for item in ["pizza", "eggs", "broccoli", "potatoes"] {
+                    assert!(payload.to_lowercase().contains(item));
+                }
+            }
+        }
+    }
     #[test]
     fn newline_plan_preserves_crlf_blank_lines_and_surrogate_pairs() {
         let source = format!(

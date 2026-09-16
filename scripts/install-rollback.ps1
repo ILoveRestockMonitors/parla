@@ -1,7 +1,7 @@
 param(
     [string]$ReleaseDirectory='',
     [ValidateSet('Prepare','Activate','Rollback')][string]$Action='Prepare',
-    [string]$Version='0.2.0-list-newlines-20260915'
+    [string]$Version='0.2.0-browser-prose-20260915'
 )
 $ErrorActionPreference='Stop'
 if($Version -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'){throw 'Invalid version'}

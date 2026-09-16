@@ -108,10 +108,10 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
         let normalized = dictionary::apply::apply_snapshot(&raw.text, &vocabulary);
         result.normalized = Some(normalized.clone());
         result.final_text = Some(normalized.clone());
-        // Number-only dictation is deterministic in both cleanup modes and
-        // every app category. Keep raw/normalized words available for restore.
-        if let Some(digits) = formatter::numbers::digit_sequence(&normalized) {
-            result.final_text = Some(digits);
+        // Numbers work everywhere; browsers keep prose and writing apps get
+        // automatic lists. Retain raw/normalized words for original recovery.
+        if let Some(text) = formatter::layout::automatic_text(&normalized, job.app.as_deref()) {
+            result.final_text = Some(text);
             return Ok(());
         }
         let category = job
@@ -119,14 +119,6 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
             .as_deref()
             .map(context::category_for_exe)
             .unwrap_or("other");
-        // Automatic list layout also works in Faithful mode, without loading
-        // a model. Preserve recognition/dictionary text for original recovery.
-        if category != "code" {
-            if let Some(list) = formatter::lists::automatic_list(&normalized) {
-                result.final_text = Some(list);
-                return Ok(());
-            }
-        }
         if job.settings.cleanup_mode == "polished"
             && category != "code"
             && command::classify(&normalized).is_none()
@@ -176,6 +168,9 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
     })();
     if let Err(error) = outcome {
         result.error = Some(error);
+    }
+    if let Some(text) = &mut result.final_text {
+        *text = formatter::layout::for_app(text, job.app.as_deref()).into_owned();
     }
     timings["processing_total"] = serde_json::json!(total.elapsed().as_millis());
     timings["release_to_result"] =
@@ -384,7 +379,7 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
                         error("Dictation cannot start in this field.");
                         continue;
                     }
-                    let app = context::windows::foreground_exe();
+                    let app = context::windows::exe_for_window(target.hwnd);
                     controller.recording = Some(mode);
                     runtime::update(|s| {
                         s.recording = true;

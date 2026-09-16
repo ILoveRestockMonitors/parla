@@ -1,29 +1,34 @@
-// Foreground process image name via Win32. Best-effort: on failure returns
-// None and the pipeline sends app_category "other".
-use windows::Win32::Foundation::HANDLE;
-use windows::Win32::System::ProcessStatus::GetModuleFileNameExW;
-use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
+// Resolve the captured window, not whichever app happens to be frontmost later.
+use windows::core::PWSTR;
+use windows::Win32::Foundation::{CloseHandle, HWND};
+use windows::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
+};
+use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 
-/// Returns the foreground executable's image name (e.g. "Code.exe"), if any.
-pub fn foreground_exe() -> Option<String> {
+/// Returns a window's executable image name with query-only process access.
+pub fn exe_for_window(window: isize) -> Option<String> {
     unsafe {
-        let hwnd = GetForegroundWindow();
+        let hwnd = HWND(window);
         if hwnd.0 == 0 {
             return None;
         }
-        let mut title = [0u16; 512];
-        let _ = GetWindowTextW(hwnd, &mut title);
-
         let mut pid = 0u32;
-        windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
         if pid == 0 {
             return None;
         }
-        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid).ok()?;
-        let mut buf = [0u16; 1024];
-        let len = GetModuleFileNameExW(HANDLE(handle.0), None, &mut buf);
-        let _ = windows::Win32::Foundation::CloseHandle(HANDLE(handle.0));
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = vec![0u16; 32768];
+        let mut len = buf.len() as u32;
+        let result = QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_FORMAT(0),
+            PWSTR(buf.as_mut_ptr()),
+            &mut len,
+        );
+        let _ = CloseHandle(handle);
+        result.ok()?;
         if len == 0 {
             return None;
         }

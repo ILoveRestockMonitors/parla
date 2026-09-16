@@ -1,5 +1,12 @@
 # Changes
 
+## 0.2.0-browser-prose-20260915
+
+- Default browser dictation to single-line prose. Skip automatic bullet layout in browser processes while retaining optional polishing and numeric entry. Codex and other writing apps keep automatic lists.
+- Resolve the captured target's process using query-only access. Match exact executable basenames for Chrome, Edge, Firefox, Brave, Opera, Vivaldi, Chromium, Arc, Zen, Waterfox, Floorp, LibreWolf and Internet Explorer; Electron apps are not classified as browsers.
+- Apply the browser rule again before insertion, clipboard backup and receipt verification, covering retry, restore and spoken-command paths. Flatten paragraphs and bullet lines; never send Enter or Shift+Enter into recognized browsers. When process lookup fails, use single-line insertion conservatively.
+- Add regression coverage for sentence/list routing, numeric entry, recovered/polished text, browser-name matching and the actual generated keyboard events. Browser grocery payloads contain all items and no Enter, Shift or newline packets.
+
 ## 0.2.0-list-newlines-20260915
 
 - Fix lists arriving as one continuous line in chat editors. Emit line breaks as complete Shift+Enter chords; keep ordinary characters on the existing Unicode typing path. Normalize CRLF to one break and preserve intentional blank lines and UTF-16 surrogate pairs.
