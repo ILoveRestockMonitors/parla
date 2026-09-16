@@ -1,57 +1,44 @@
-// Modern PTT feedback: SYNTH chimes synthesized in memory, played via winmm
-// PlaySound (SND_MEMORY|SND_ASYNC). Replaces both the kernel32 Beep and the
-// earlier pure-sine version.
-//
-// Sound design: layered oscillator stack (saw-lite harmonic series + detuned
-// second oscillator for width), quick pitch-drop pluck, fast attack / exp
-// decay. Bright but polite. Buffers cached for process lifetime because
-// SND_ASYNC requires the memory to stay valid.
+//! Soft, overlapping sine chimes. Each voice fades fully to silence so neither
+//! note boundaries nor the end of a cue introduce a click. No audio assets or
+//! external services are needed; PlaySound buffers live for the process lifetime.
+use std::f32::consts::{PI, TAU};
 #[cfg(windows)]
 use std::sync::OnceLock;
 
-#[cfg(windows)]
-const RATE: u32 = 22_050;
-
+const RATE: u32 = 48_000;
 #[cfg(windows)]
 static CHIMES: OnceLock<[Vec<u8>; 3]> = OnceLock::new();
 
-/// One synth voice: harmonic series (saw-lite) + detuned twin + pluck glide.
-#[cfg(windows)]
-fn segment(samples: &mut Vec<i16>, f0: f32, f1: f32, ms: u32, vol: f32) {
-    let n = (RATE as usize * ms as usize) / 1000;
-    let attack = (RATE as usize * 3) / 1000; // 3 ms fast attack
-    let mut ph1 = 0.0f32;
-    let mut ph2 = 0.25f32; // offset so the detune twin doesn't null-cancel at t=0
-    for i in 0..n {
-        let t = i as f32 / n.max(1) as f32;
-        // pluck: pitch starts ~2% sharp and settles within the first fifth
-        let bend = 1.0 + 0.02 * (-t * 5.0).exp();
-        let f = (f0 + (f1 - f0) * t) * bend;
-
-        ph1 += core::f32::consts::TAU * f / RATE as f32;
-        ph2 += core::f32::consts::TAU * (f * 1.004) / RATE as f32; // +7 cents twin
-
-        // saw-lite stack: 1 + 1/2 + 1/3 + 1/4 (softened highs)
-        let osc1 = ph1.sin()
-            + 0.50 * (2.0 * ph1).sin()
-            + 0.33 * (3.0 * ph1).sin()
-            + 0.20 * (4.0 * ph1).sin();
-        // twin carries mostly fundamental -> width without mud
-        let osc2 = ph2.sin();
-        let mut env = if i < attack {
-            i as f32 / attack as f32
-        } else {
-            (-(t * 4.0)).exp().max(0.12) // exponential body decay, audible tail
-        };
-
-        // hard-limit the stacked waveform before scaling
-        let raw = (osc1 * 0.22 + osc2 * 0.16).clamp(-0.9, 0.9);
-        samples.push((raw * env * vol * 30_000.0) as i16);
-        let _ = &mut env;
+fn voice(samples: &mut [f32], hz: f32, offset_ms: usize, duration_ms: usize, gain: f32) {
+    let offset = RATE as usize * offset_ms / 1000;
+    let count = RATE as usize * duration_ms / 1000;
+    for i in 0..count {
+        let time = i as f32 / RATE as f32;
+        let progress = i as f32 / (count - 1) as f32;
+        // A 22 ms raised-cosine attack, warm decay, and a 70 ms soft release.
+        let attack = (time / 0.022).min(1.0);
+        let release = ((count - 1 - i) as f32 / (RATE as f32 * 0.070)).min(1.0);
+        let envelope = (0.5 - 0.5 * (PI * attack).cos())
+            * (0.5 - 0.5 * (PI * release).cos())
+            * (-3.2 * progress).exp();
+        let phase = TAU * hz * time;
+        let tone = 0.96 * phase.sin() + 0.04 * (2.0 * phase).sin();
+        samples[offset + i] += gain * envelope * tone;
     }
 }
 
-#[cfg(windows)]
+fn cue(notes: &[(f32, usize, usize, f32)]) -> Vec<i16> {
+    let ms = notes.iter().map(|n| n.1 + n.2).max().unwrap_or(0);
+    let mut samples = vec![0.0; RATE as usize * ms / 1000];
+    for &(hz, offset, duration, gain) in notes {
+        voice(&mut samples, hz, offset, duration, gain);
+    }
+    samples
+        .iter()
+        .map(|s| (s * i16::MAX as f32).round() as i16)
+        .collect()
+}
+
 fn wav_bytes(pcm: &[i16]) -> Vec<u8> {
     let data_len = pcm.len() * 2;
     let mut b = Vec::with_capacity(44 + data_len);
@@ -59,8 +46,8 @@ fn wav_bytes(pcm: &[i16]) -> Vec<u8> {
     b.extend_from_slice(&(36 + data_len as u32).to_le_bytes());
     b.extend_from_slice(b"WAVEfmt ");
     b.extend_from_slice(&16u32.to_le_bytes());
-    b.extend_from_slice(&1u16.to_le_bytes()); // PCM
-    b.extend_from_slice(&1u16.to_le_bytes()); // mono
+    b.extend_from_slice(&1u16.to_le_bytes());
+    b.extend_from_slice(&1u16.to_le_bytes());
     b.extend_from_slice(&RATE.to_le_bytes());
     b.extend_from_slice(&(RATE * 2).to_le_bytes());
     b.extend_from_slice(&2u16.to_le_bytes());
@@ -73,20 +60,24 @@ fn wav_bytes(pcm: &[i16]) -> Vec<u8> {
     b
 }
 
-#[cfg(windows)]
 fn build_chimes() -> [Vec<u8>; 3] {
-    // START: rising fifth D5->A5, bright pluck then settle
-    let mut start = Vec::new();
-    segment(&mut start, 587.0, 880.0, 70, 0.9);
-    segment(&mut start, 880.0, 880.0, 90, 0.8);
-    // END: falling A5->D5 with a lower landing note (resolved feel)
-    let mut end = Vec::new();
-    segment(&mut end, 880.0, 587.0, 60, 0.85);
-    segment(&mut end, 587.0, 494.0, 100, 0.75);
-    // ERROR: low G3->E3 downglide, darker (quieter high partials dominate less)
-    let mut err = Vec::new();
-    segment(&mut err, 208.0, 165.0, 180, 0.85);
-    [wav_bytes(&start), wav_bytes(&end), wav_bytes(&err)]
+    [
+        // An airy upward fifth opens recording; a lower third resolves it.
+        wav_bytes(&cue(&[(440.0, 0, 220, 0.17), (659.25, 55, 230, 0.12)])),
+        wav_bytes(&cue(&[(523.25, 0, 175, 0.14), (392.0, 45, 195, 0.11)])),
+        // Distinct, but no harsh buzz on an error.
+        wav_bytes(&cue(&[(329.63, 0, 190, 0.14), (261.63, 100, 210, 0.12)])),
+    ]
+}
+
+pub fn write_previews(directory: &std::path::Path) -> std::io::Result<()> {
+    for (name, bytes) in ["start.wav", "done.wav", "error.wav"]
+        .iter()
+        .zip(build_chimes())
+    {
+        std::fs::write(directory.join(name), bytes)?;
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -95,13 +86,6 @@ extern "system" {
     fn PlaySoundW(psnd: *const u8, hmod: isize, fdw: u32) -> i32;
 }
 
-#[cfg(windows)]
-const SND_ASYNC: u32 = 0x0001;
-#[cfg(windows)]
-const SND_NODEFAULT: u32 = 0x0002;
-#[cfg(windows)]
-const SND_MEMORY: u32 = 0x0004;
-
 #[derive(Clone, Copy)]
 pub enum ChimeKind {
     Start,
@@ -109,7 +93,7 @@ pub enum ChimeKind {
     Error,
 }
 
-/// Fire-and-forget: plays on its own thread, never blocks the pipeline.
+/// Fire-and-forget: synthesis and playback never block the dictation pipeline.
 pub fn play(kind: ChimeKind) {
     #[cfg(windows)]
     {
@@ -121,12 +105,48 @@ pub fn play(kind: ChimeKind) {
                 ChimeKind::Error => 2,
             };
             unsafe {
-                PlaySoundW(set[idx].as_ptr(), 0, SND_ASYNC | SND_MEMORY | SND_NODEFAULT);
+                // SND_ASYNC | SND_MEMORY | SND_NODEFAULT
+                PlaySoundW(set[idx].as_ptr(), 0, 0x0001 | 0x0004 | 0x0002);
             }
         });
     }
     #[cfg(not(windows))]
-    {
-        let _ = kind;
+    let _ = kind;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn cues_are_quiet_click_free_and_fade_to_silence() {
+        let chimes = build_chimes();
+        assert_ne!(chimes[0], chimes[1]);
+        for wav in chimes {
+            let samples: Vec<i16> = wav[44..]
+                .chunks_exact(2)
+                .map(|b| i16::from_le_bytes([b[0], b[1]]))
+                .collect();
+            assert_eq!(samples.first(), Some(&0));
+            assert_eq!(samples.last(), Some(&0));
+            let peak = samples.iter().map(|&s| (s as i32).abs()).max().unwrap();
+            assert!(
+                peak > 2000 && peak < 8000,
+                "cue must be audible without becoming piercing"
+            );
+            assert!(
+                samples
+                    .windows(2)
+                    .all(|w| (w[1] as i32 - w[0] as i32).abs() < 600),
+                "discontinuous samples click"
+            );
+            assert!(
+                samples.iter().rev().take(240).all(|s| s.abs() < 20),
+                "last 5 ms must settle to silence"
+            );
+            assert_eq!(
+                u32::from_le_bytes(wav[40..44].try_into().unwrap()) as usize,
+                samples.len() * 2
+            );
+        }
     }
 }

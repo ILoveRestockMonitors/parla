@@ -20,6 +20,22 @@ mod store;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(windows)]
+    if let Some(i) = args.iter().position(|a| a == "--preview-feedback") {
+        let Some(directory) = args.get(i + 1) else {
+            eprintln!("--preview-feedback requires an output directory");
+            std::process::exit(1);
+        };
+        let directory = std::path::Path::new(directory);
+        let result = std::fs::create_dir_all(directory)
+            .and_then(|_| audio::beep::write_previews(directory))
+            .and_then(|_| hud::write_previews(directory));
+        if let Err(error) = result {
+            eprintln!("[preview-feedback] {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if args.iter().any(|a| a == "--selftest") {
         run_selftest();
         return;

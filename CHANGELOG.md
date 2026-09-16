@@ -1,5 +1,31 @@
 # Changes
 
+## 0.2.0-lists-20260915
+
+- Automatically format clear spoken lists as separate plain-text bullet lines in Faithful and Polished modes, without calling a language model. For example, "I'm going grocery shopping. I need these in order. Eggs, milk, bread, cheese pizza" keeps the introduction and produces four bullets, preserving "cheese pizza" as one item.
+- Recognize common shopping/list introductions, concise comma/semicolon enumerations, and consecutive first/second/third markers. Preserve item order, quantities, names, repeated items, quoted/parenthesized phrases and a following prose sentence. Code-editor dictation and number-only entry retain their existing paths.
+- Keep ordinary prose and existing multiline text unchanged. This is conservative boundary detection: a phrase with no punctuation or list markers remains intact rather than guessing where multiword items begin/end. Recognition quality still determines the available words and punctuation.
+
+## 0.2.0-feedback-20260915
+
+- Replace the bright synth beeps with quiet, overlapping sine chimes. Rounded attacks and complete fade-outs remove the old hard note boundaries; start, completion and error remain distinct.
+- Replace the rectangular status window with a native dark capsule, anti-aliased corners, transparent shadow, mint status symbol, clear timing and shortcut hints. Fade in/out gently, respect Windows animation preferences, and scale text for the active monitor above its taskbar.
+- Keep the overlay click-through and non-activating. Recording and processing are the only visible states; idle and disabled HUDs stay hidden. Dictation, shortcuts, recognition, numeric conversion and text insertion are unchanged.
+- `parla.exe --preview-feedback <output-directory>` exports the exact chimes and native HUD renders at 100%, 150% and 200% scale without playback, microphone capture, keyboard hooks or model services.
+
+## 0.2.0-number-phrases-20260915
+
+- Extend automatic numeric dictation to teens, tens, hyphenated compounds, hundreds and descending thousand/million/billion/trillion phrases. Mixed speech such as "seven eight nine six nine four twenty" becomes `78969420`; "sixty seven two four zero nine eight" becomes `6724098`.
+- Parse conventional phrases as numeric chunks before joining them: "sixty-nine thousand four hundred twenty" becomes `69420`. Accept "and" within hundred/scale phrases. Preserve existing numeric groups and leading zeros; reject invalid grammar and arithmetic overflow without partial conversion.
+- Keep the whole-utterance check: "Paul had two apples" and other prose continue through normal cleanup. No mode switch or formatter call is required for number-only speech.
+
+## 0.2.0-numbers-20260915
+
+- Automatically join utterances consisting entirely of zero-through-nine words and recognized digit groups. "One five four eight seven nine one three two" becomes `154879132`; leading zeros are preserved. "Oh" means zero only alongside an unambiguous digit.
+- Apply after dictionary corrections, before optional polishing, in both cleanup modes and all app categories. Preserve raw recognition and dictionary-normalized text for recovery. No setting, model call, or extra mode is needed.
+- Omit the usual trailing space for pure digit output, including clipboard backup. Leave prose, ambiguous homophones, signs, decimals and cardinal phrases on the existing cleanup path.
+- Regression coverage includes the requested sequence, ASR punctuation/case/whitespace, mixed digits, long codes, leading zeros, ordinary sentences and exact insertion spacing.
+
 ## 0.2.0-automatic-20260908
 
 - Reverted the clipboard-paste release at the user's request. Automatic Unicode typing is restored. Best-effort clipboard copying remains as an independent backup and cannot block automatic insertion.

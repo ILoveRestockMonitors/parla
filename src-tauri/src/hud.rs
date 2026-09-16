@@ -1,6 +1,11 @@
 //! Optional status HUD; never activates or takes keyboard focus.
 use serde_json::Value;
 
+#[cfg(windows)]
+mod native;
+#[cfg(windows)]
+pub use native::write_previews;
+
 pub fn status_label(snapshot: &Value) -> Option<String> {
     let settings = snapshot.get("effective_settings")?;
     if settings.get("hud_enabled").and_then(Value::as_bool) == Some(false) {
@@ -45,53 +50,9 @@ pub fn status_label(snapshot: &Value) -> Option<String> {
 pub fn spawn() {
     std::thread::Builder::new()
         .name("parla-hud".into())
-        .spawn(|| unsafe {
-            use windows::core::{w, PCWSTR};
-            use windows::Win32::Foundation::HWND;
-            use windows::Win32::UI::WindowsAndMessaging::*;
-            let hwnd = CreateWindowExW(
-                WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-                w!("STATIC"),
-                w!("Parla"),
-                WINDOW_STYLE(WS_POPUP.0 | WS_BORDER.0),
-                0,
-                0,
-                430,
-                60,
-                None,
-                None,
-                None,
-                None,
-            );
-            if hwnd.0 == 0 {
-                return;
-            }
-            let x = (GetSystemMetrics(SM_CXSCREEN) - 430) / 2;
-            let y = GetSystemMetrics(SM_CYSCREEN) - 100;
-            let _ = SetWindowPos(hwnd, HWND_TOPMOST, x, y, 430, 60, SWP_NOACTIVATE);
-            let mut msg = MSG::default();
-            loop {
-                while PeekMessageW(&mut msg, HWND(0), 0, 0, PM_REMOVE).as_bool() {
-                    if msg.message == WM_QUIT {
-                        let _ = DestroyWindow(hwnd);
-                        return;
-                    }
-                    let _ = TranslateMessage(&msg);
-                    DispatchMessageW(&msg);
-                }
-                let label = status_label(&crate::runtime::hud_snapshot());
-                match label {
-                    Some(text) => {
-                        let wide: Vec<u16> =
-                            text.encode_utf16().chain(std::iter::once(0)).collect();
-                        let _ = SetWindowTextW(hwnd, PCWSTR(wide.as_ptr()));
-                        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-                    }
-                    None => {
-                        let _ = ShowWindow(hwnd, SW_HIDE);
-                    }
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
+        .spawn(|| {
+            if let Err(error) = native::run() {
+                eprintln!("[hud] {error}");
             }
         })
         .ok();

@@ -16,10 +16,12 @@ Automatic insertion uses Unicode typing. Each completed dictation also copies it
 
 - Local recognition through whisper.cpp, with optional Parakeet through a local Python/sherpa-onnx service.
 - **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections.
+- Clear lists automatically become separate bullet lines in both cleanup modes. Say "I need eggs, milk, bread, and cheese pizza" or "First, call Alex. Second, review the quote." Introductions stay above the list; multiword items stay together. Natural pauses help recognition add item separators. Unclear boundaries stay as spoken text, and code editors keep ordinary dictation.
+- Number-only dictation is automatic in both cleanup modes: "one five four" becomes `154`; "sixty seven two four zero nine eight" becomes `6724098`; "sixty-nine thousand four hundred twenty" becomes `69420`. Natural number phrases are combined before joining adjacent chunks. Leading zeros and existing numeric groups are preserved. Ordinary sentences stay on the normal cleanup path. Digit entries have no trailing space; signs, decimals and ambiguous homophones are left alone.
 - Optional **Polished** cleanup uses a local Ollama model, with validation and fallback when the proposed edit changes protected content.
 - **Learn correction** saves an explicit spelling replacement; it does not retrain the recognition model.
 - **Restore original** attempts to replace the most recent unchanged insertion with raw recognition text after you return to the original field. The dashboard explains the time limit and recovery conditions.
-- Optional short-lived retry audio, bounded recording sessions, chimes, history controls, and a native HUD.
+- Optional short-lived retry audio, bounded recording sessions, soft chimes, history controls, and a rounded native HUD that fades above the active monitor's taskbar without taking focus.
 
 ## Build overview
 

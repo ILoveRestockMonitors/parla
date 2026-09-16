@@ -108,11 +108,25 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
         let normalized = dictionary::apply::apply_snapshot(&raw.text, &vocabulary);
         result.normalized = Some(normalized.clone());
         result.final_text = Some(normalized.clone());
+        // Number-only dictation is deterministic in both cleanup modes and
+        // every app category. Keep raw/normalized words available for restore.
+        if let Some(digits) = formatter::numbers::digit_sequence(&normalized) {
+            result.final_text = Some(digits);
+            return Ok(());
+        }
         let category = job
             .app
             .as_deref()
             .map(context::category_for_exe)
             .unwrap_or("other");
+        // Automatic list layout also works in Faithful mode, without loading
+        // a model. Preserve recognition/dictionary text for original recovery.
+        if category != "code" {
+            if let Some(list) = formatter::lists::automatic_list(&normalized) {
+                result.final_text = Some(list);
+                return Ok(());
+            }
+        }
         if job.settings.cleanup_mode == "polished"
             && category != "code"
             && command::classify(&normalized).is_none()
@@ -586,7 +600,7 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
 pub fn seam_spaced(text: &str) -> String {
     if text.is_empty() {
         String::new()
-    } else if text.ends_with(char::is_whitespace) {
+    } else if text.ends_with(char::is_whitespace) || text.bytes().all(|c| c.is_ascii_digit()) {
         text.into()
     } else {
         format!("{text} ")
@@ -631,5 +645,9 @@ mod tests {
         assert_eq!(seam_spaced(""), "");
         assert_eq!(seam_spaced("Hi"), "Hi ");
         assert_eq!(seam_spaced("Hi\n"), "Hi\n");
+        assert_eq!(seam_spaced("154879132"), "154879132");
+        assert_eq!(seam_spaced("007"), "007");
+        assert_eq!(seam_spaced("one five"), "one five ");
+        assert_eq!(seam_spaced("I need 5"), "I need 5 ");
     }
 }
