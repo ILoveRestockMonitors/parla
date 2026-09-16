@@ -1,5 +1,11 @@
 # Changes
 
+## 0.2.0-list-newlines-20260915
+
+- Fix lists arriving as one continuous line in chat editors. Emit line breaks as complete Shift+Enter chords; keep ordinary characters on the existing Unicode typing path. Normalize CRLF to one break and preserve intentional blank lines and UTF-16 surrogate pairs.
+- Keep each chord inside one SendInput call, retain target/input/modifier checks between batches, and release only unfinished injected keys if a partial chord is reported. Never retry text or an Enter key-down after partial insertion.
+- Add insertion regression tests and an isolated browser fixture for multiline text and chat-style inputs with a simulated send counter. Both fields retain the five-line grocery example with zero simulated sends. These browser checks exercise equivalent keystrokes; they do not type into the user's Codex conversation.
+
 ## 0.2.0-lists-20260915
 
 - Automatically format clear spoken lists as separate plain-text bullet lines in Faithful and Polished modes, without calling a language model. For example, "I'm going grocery shopping. I need these in order. Eggs, milk, bread, cheese pizza" keeps the introduction and produces four bullets, preserving "cheese pizza" as one item.

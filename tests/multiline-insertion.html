@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Parla isolated multiline insertion test</title>
+<style>
+body{font:16px system-ui;background:#f4f6f8;color:#202733;padding:32px;max-width:900px;margin:auto}
+h1{font-size:24px}section{background:white;border:1px solid #d8dee6;border-radius:14px;padding:20px;margin:20px 0}
+textarea,[contenteditable]{box-sizing:border-box;width:100%;min-height:170px;white-space:pre-wrap;border:1px solid #aab6c4;border-radius:8px;padding:14px;font:18px/1.6 system-ui}
+pre{white-space:pre-wrap;color:#526174}button{padding:8px 16px}output{display:block;font-weight:600;margin-top:12px}
+</style>
+<h1>Parla isolated multiline insertion test</h1>
+<p>Local scratch fields only. Enter simulates a chat send counter; Shift+Enter inserts a line break. Nothing is transmitted.</p>
+<section><h2>Chat-style rich editor</h2><div id="rich" role="textbox" aria-label="Chat test editor" contenteditable="true" aria-multiline="true"></div><output id="rich-result">Lines: 0 · Simulated sends: 0</output><pre id="rich-text"></pre></section>
+<section><h2>Plain multiline input</h2><textarea id="plain" aria-label="Plain test editor"></textarea><output id="plain-result">Lines: 0 · Simulated sends: 0</output><pre id="plain-text"></pre></section>
+<button id="reset">Reset test fields</button>
+<script>
+const editors=[document.getElementById('rich'),document.getElementById('plain')];
+const sends={rich:0,plain:0};
+function render(el){const value=el.tagName==='TEXTAREA'?el.value:el.innerText;document.getElementById(el.id+'-result').textContent=`Lines: ${value?value.replace(/\n$/,'').split('\n').length:0} · Simulated sends: ${sends[el.id]}`;document.getElementById(el.id+'-text').textContent=JSON.stringify(value)}
+for(const el of editors){el.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sends[el.id]++;render(el)}});el.addEventListener('input',()=>render(el))}
+document.getElementById('reset').onclick=()=>{for(const el of editors){if(el.tagName==='TEXTAREA')el.value='';else el.textContent='';sends[el.id]=0;render(el)}};
+</script>

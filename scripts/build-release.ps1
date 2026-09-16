@@ -13,7 +13,7 @@ $cargo=(Get-Command cargo -ErrorAction SilentlyContinue).Source
 if(!$cargo){$cargo=Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'}
 if(!(Test-Path -LiteralPath $cargo -PathType Leaf)){throw 'Install Rust/rustup first'}
 if($Toolchain -notmatch '^[A-Za-z0-9._-]+-x86_64-pc-windows-gnu$'){throw 'This recipe requires a Windows x64 GNU toolchain'}
-$version='0.2.0-lists-20260915'
+$version='0.2.0-list-newlines-20260915'
 $target=Join-Path $env:TEMP 'parla-shareable-build'
 $env:CARGO_TARGET_DIR=$target
 $env:CC=Join-Path $compiler 'gcc.exe'
