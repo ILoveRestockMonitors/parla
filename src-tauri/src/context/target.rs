@@ -9,9 +9,10 @@ use windows::Win32::System::Ole::{
     SafeArrayDestroy, SafeArrayGetElement, SafeArrayGetLBound, SafeArrayGetUBound,
 };
 use windows::Win32::UI::Accessibility::{
-    CUIAutomation, IUIAutomation, IUIAutomationTextPattern, IUIAutomationTextRange,
-    TextPatternRangeEndpoint_End as End, TextPatternRangeEndpoint_Start as Start,
-    TextUnit_Character, UIA_TextPatternId,
+    CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTextPattern,
+    IUIAutomationTextRange, TextPatternRangeEndpoint_End as End,
+    TextPatternRangeEndpoint_Start as Start, TextUnit_Character, UIA_DocumentControlTypeId,
+    UIA_TextControlTypeId, UIA_TextPatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO,
@@ -26,6 +27,8 @@ pub struct FieldContext {
     pub password: bool,
     pub available: bool,
     pub inspection_failed: bool,
+    /// A recognized terminal's screen buffer, not an editable document.
+    pub terminal: bool,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TargetSnapshot {
@@ -91,6 +94,16 @@ impl TargetSnapshot {
         if self.context.password || other.context.password {
             return Some("password field cannot receive dictation");
         }
+        if (self.context.terminal || other.context.terminal)
+            && [&self.context, &other.context].iter().any(|context| {
+                context
+                    .selected_text
+                    .as_ref()
+                    .is_some_and(|text| !text.is_empty())
+            })
+        {
+            return Some("terminal text selection is active");
+        }
         if self.context.inspection_failed || other.context.inspection_failed {
             return Some("field inspection timed out or failed");
         }
@@ -122,6 +135,16 @@ impl TargetSnapshot {
             let Some(reason) = self.insertion_mismatch(&current) else {
                 return Ok(());
             };
+            // A terminal exposes output, prompt chrome and the display cursor
+            // through TextPattern. Hermes redraws those without editing input.
+            // Only ordinary insertion can tolerate that change, and only with
+            // positive pane identity, empty selections and input continuity.
+            if reason == "caret, selection, or surrounding text changed"
+                && self.terminal_redraw_matches(&current)
+                && still_focused()
+            {
+                return Ok(());
+            }
             let transient = reason == "field inspection timed out or failed"
                 || reason == "field identity temporarily unavailable"
                 || reason == "caret inspection temporarily unavailable";
@@ -139,6 +162,21 @@ impl TargetSnapshot {
     }
     pub fn native_still_focused(&self) -> bool {
         native_focus() == (self.hwnd, self.focus)
+    }
+    fn terminal_redraw_matches(&self, other: &Self) -> bool {
+        self.context.terminal
+            && other.context.terminal
+            && self.context.available
+            && other.context.available
+            && !self.context.inspection_failed
+            && !other.context.inspection_failed
+            && self.context.selected_text.as_deref() == Some("")
+            && other.context.selected_text.as_deref() == Some("")
+            && matches!(
+                (&self.context.runtime_id, &other.context.runtime_id),
+                (Some(a), Some(b)) if !a.is_empty() && a == b
+            )
+            && self.native_fallback_matches(other)
     }
     fn native_fallback_matches(&self, other: &Self) -> bool {
         self.hwnd != 0
@@ -250,11 +288,31 @@ fn failed_probe() -> FieldContext {
 }
 unsafe fn probe_inner(automation: &IUIAutomation) -> windows::core::Result<FieldContext> {
     let focused = automation.GetFocusedElement()?;
+    probe_element(&focused)
+}
+unsafe fn probe_element(focused: &IUIAutomationElement) -> windows::core::Result<FieldContext> {
     let mut result = FieldContext::default();
     result.password = focused.CurrentIsPassword()?.as_bool();
     if result.password {
         return Ok(result);
     }
+    let exe = focused
+        .CurrentProcessId()
+        .ok()
+        .and_then(|pid| crate::context::windows::exe_for_process(pid as u32));
+    result.terminal = exe.as_deref().is_some_and(|exe| {
+        is_terminal_control(
+            exe,
+            &focused
+                .CurrentClassName()
+                .map(|s| s.to_string())
+                .unwrap_or_default(),
+            focused
+                .CurrentControlType()
+                .map(|id| id.0)
+                .unwrap_or_default(),
+        )
+    });
     if let Ok(array) = focused.GetRuntimeId() {
         let id = (|| -> windows::core::Result<Vec<i32>> {
             let low = SafeArrayGetLBound(array, 1)?;
@@ -306,6 +364,19 @@ unsafe fn probe_inner(automation: &IUIAutomation) -> windows::core::Result<Field
     result.text_after = Some(after.GetText(640)?.to_string());
     result.available = true;
     Ok(result)
+}
+
+fn is_terminal_control(exe: &str, class: &str, control_type: i32) -> bool {
+    if !super::is_terminal_exe(exe) {
+        return false;
+    }
+    let name = exe.rsplit(['\\', '/']).next().unwrap_or(exe);
+    if name.eq_ignore_ascii_case("WindowsTerminal.exe") {
+        class == "TermControl" && control_type == UIA_TextControlTypeId.0
+    } else {
+        // Classic console exposes its screen as a Document with no class name.
+        class.is_empty() && control_type == UIA_DocumentControlTypeId.0
+    }
 }
 unsafe fn range_within(
     range: &IUIAutomationTextRange,
@@ -434,6 +505,110 @@ mod tests {
         assert!(!a.unchanged(&b));
         assert!(a.unchanged(&a));
     }
+    fn terminal_target() -> TargetSnapshot {
+        let mut snapshot = target();
+        snapshot.input_epoch = Some(7);
+        snapshot.context.terminal = true;
+        snapshot.context.text_before = Some("Working (1s)\r\nHermes > ".into());
+        snapshot.context.text_after = Some("\r\nstatus: thinking".into());
+        snapshot
+    }
+    #[test]
+    fn terminal_redraw_does_not_block_ordinary_dictation() {
+        let before = terminal_target();
+        let mut after = before.clone();
+        after.context.text_before = Some("Working (3s)\r\nNew output\r\nHermes > ".into());
+        after.context.text_after = Some("\r\nstatus: ready".into());
+        // Reproduces the failure observed in the running app. Exact document
+        // comparison must still fail for commands and replacement operations.
+        assert_eq!(
+            before.insertion_mismatch(&after),
+            Some("caret, selection, or surrounding text changed")
+        );
+        assert!(!before.unchanged(&after));
+        assert!(before
+            .verify_observations(|| after.clone(), || true)
+            .is_ok());
+        assert!(before
+            .verify_observations(|| after.clone(), || false)
+            .is_err());
+        let mut document = before.clone();
+        document.context.terminal = false;
+        after.context.terminal = false;
+        assert!(document
+            .verify_observations(|| after.clone(), || true)
+            .is_err());
+    }
+    #[test]
+    fn terminal_redraw_requires_same_pane_no_user_input_and_empty_selection() {
+        let before = terminal_target();
+        let mut after = before.clone();
+        after.context.text_before = Some("redrawn prompt".into());
+        let mutations: &[fn(&mut TargetSnapshot)] = &[
+            |s| s.input_epoch = Some(8),
+            |s| s.input_epoch = None,
+            |s| s.hwnd += 1,
+            |s| s.focus += 1,
+            |s| s.context.runtime_id = Some(vec![43]),
+            |s| s.context.runtime_id = None,
+            |s| s.context.password = true,
+            |s| s.context.terminal = false,
+            |s| s.context.selected_text = Some("selected output".into()),
+            |s| s.context.selected_text = None,
+        ];
+        for mutate in mutations {
+            let mut changed = after.clone();
+            mutate(&mut changed);
+            assert!(!before.terminal_redraw_matches(&changed));
+            // Missing identity follows the pre-existing observation retry path;
+            // the redraw exemption itself never accepts an unknown pane.
+            if changed.context.runtime_id.is_some() {
+                assert!(before
+                    .verify_observations(|| changed.clone(), || true)
+                    .is_err());
+            }
+        }
+        let mut missing_start = before.clone();
+        missing_start.input_epoch = None;
+        assert!(missing_start
+            .verify_observations(|| after.clone(), || true)
+            .is_err());
+        let mut selected = before.clone();
+        selected.context.selected_text = Some("selected output".into());
+        assert!(selected
+            .verify_observations(|| selected.clone(), || true)
+            .is_err());
+        assert!(selected
+            .verify_observations(|| after.clone(), || true)
+            .is_err());
+    }
+    #[test]
+    fn only_recognized_terminal_screen_controls_allow_redraws() {
+        assert!(is_terminal_control(
+            "WindowsTerminal.exe",
+            "TermControl",
+            UIA_TextControlTypeId.0
+        ));
+        assert!(is_terminal_control(
+            "conhost.exe",
+            "",
+            UIA_DocumentControlTypeId.0
+        ));
+        assert!(is_terminal_control(
+            "OpenConsole.exe",
+            "",
+            UIA_DocumentControlTypeId.0
+        ));
+        for (exe, class, kind) in [
+            ("WindowsTerminal.exe", "TextBox", 50004),
+            ("WindowsTerminal.exe", "TextBlock", UIA_TextControlTypeId.0),
+            ("conhost.exe", "", 50004),
+            ("Code.exe", "TermControl", UIA_TextControlTypeId.0),
+            ("chrome.exe", "TermControl", UIA_TextControlTypeId.0),
+        ] {
+            assert!(!is_terminal_control(exe, class, kind));
+        }
+    }
     #[test]
     fn transient_probe_recovers_without_changing_target() {
         let a = target();
@@ -534,6 +709,39 @@ mod tests {
         assert!(failed.verify_observations(|| a.clone(), || true).is_err());
     }
     #[test]
+    #[ignore = "read-only terminal provider check; set PARLA_TEST_HWND to a verified Windows Terminal window"]
+    fn live_terminal_provider_diagnostic() {
+        unsafe {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::Accessibility::{
+                TreeScope_Descendants, UIA_ClassNamePropertyId,
+            };
+            let hwnd: isize = std::env::var("PARLA_TEST_HWND").unwrap().parse().unwrap();
+            CoInitializeEx(None, COINIT_MULTITHREADED).unwrap();
+            let automation: IUIAutomation =
+                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).unwrap();
+            let root = automation.ElementFromHandle(HWND(hwnd)).unwrap();
+            let condition = automation
+                .CreatePropertyCondition(
+                    UIA_ClassNamePropertyId,
+                    &windows::core::VARIANT::from("TermControl"),
+                )
+                .unwrap();
+            let terminal = root.FindFirst(TreeScope_Descendants, &condition).unwrap();
+            let context = probe_element(&terminal).unwrap();
+            eprintln!(
+                "terminal={}, available={}, inspection_failed={}, identity_available={}",
+                context.terminal,
+                context.available,
+                context.inspection_failed,
+                context.runtime_id.is_some()
+            );
+            assert!(context.terminal && context.available && !context.inspection_failed);
+            assert!(context.runtime_id.is_some());
+            // No text or identifiers are printed; no focus or input is changed.
+        }
+    }
+    #[test]
     #[ignore = "reads the foreground application's accessibility provider; run manually"]
     fn live_field_inspection_diagnostic() {
         let first = TargetSnapshot::capture(120);
@@ -541,9 +749,10 @@ mod tests {
             std::thread::sleep(Duration::from_millis(50));
             let next = TargetSnapshot::capture(150);
             // Never log field contents, window titles, or runtime identifiers.
-            eprintln!("field check: {:?}; initial available={}, failed={}; current available={}, failed={}",
+            eprintln!("field check: {:?}; initial available={}, failed={}, terminal={}; current available={}, failed={}, terminal={}; same native={}, same field={}",
                 first.insertion_mismatch(&next), first.context.available, first.context.inspection_failed,
-                next.context.available, next.context.inspection_failed);
+                first.context.terminal, next.context.available, next.context.inspection_failed, next.context.terminal,
+                first.hwnd != 0 && (first.hwnd, first.focus) == (next.hwnd, next.focus), first.same_field(&next));
         }
     }
     #[test]

@@ -1,12 +1,14 @@
-//! Browsers default to prose because even Shift+Enter can navigate search fields.
-use crate::context::{category_for_exe, is_browser_exe};
+//! Browsers and terminals use prose: Shift+Enter can navigate or submit input.
+use crate::context::{category_for_exe, is_browser_exe, is_terminal_exe};
 use std::borrow::Cow;
 
 pub fn automatic_text(text: &str, app: Option<&str>) -> Option<String> {
     if let Some(digits) = super::numbers::digit_sequence(text) {
         return Some(digits);
     }
-    if app.is_some_and(|exe| is_browser_exe(exe) || category_for_exe(exe) == "code") {
+    if app.is_some_and(|exe| {
+        is_browser_exe(exe) || is_terminal_exe(exe) || category_for_exe(exe) == "code"
+    }) {
         return None;
     }
     super::lists::automatic_list(text)
@@ -15,7 +17,7 @@ pub fn automatic_text(text: &str, app: Option<&str>) -> Option<String> {
 /// Apply after polishing and again to the actual insertion target. This also
 /// covers recovered text and explicit commands, which can bypass formatting.
 pub fn for_app<'a>(text: &'a str, app: Option<&str>) -> Cow<'a, str> {
-    if app.is_some_and(is_browser_exe) {
+    if app.is_some_and(|exe| is_browser_exe(exe) || is_terminal_exe(exe)) {
         single_line(text)
     } else {
         Cow::Borrowed(text)
@@ -65,6 +67,22 @@ mod tests {
     use super::*;
     const SPOKEN: &str = "I need these in order. Cheese pizza, eggs, broccoli, potatoes.";
     const LIST: &str = "I need these in order:\n• Cheese pizza\n• Eggs\n• Broccoli\n• Potatoes";
+
+    #[test]
+    fn terminals_keep_prose_and_digits_and_flatten_recovered_lists() {
+        for app in ["WindowsTerminal.exe", "conhost.exe", "OpenConsole.exe"] {
+            assert_eq!(automatic_text(SPOKEN, Some(app)), None);
+            assert_eq!(for_app(SPOKEN, Some(app)), SPOKEN);
+            assert_eq!(
+                automatic_text("zero zero seven", Some(app)).as_deref(),
+                Some("007")
+            );
+            assert_eq!(
+                for_app(LIST, Some(app)),
+                "I need these in order: Cheese pizza, Eggs, Broccoli, Potatoes"
+            );
+        }
+    }
 
     #[test]
     fn browsers_keep_grocery_sentences_and_numeric_entry() {

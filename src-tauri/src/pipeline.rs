@@ -123,7 +123,13 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
             && category != "code"
             && command::classify(&normalized).is_none()
         {
-            let ctx = job.target.as_ref().map(|t| &t.context);
+            // Terminal TextPattern contains scrollback/status output, not the
+            // draft being edited; it must not influence wording or casing.
+            let ctx = job
+                .target
+                .as_ref()
+                .filter(|t| !t.context.terminal)
+                .map(|t| &t.context);
             let envelope = ContextEnvelope {
                 mode: "dictation".into(),
                 raw_transcript: normalized.clone(),

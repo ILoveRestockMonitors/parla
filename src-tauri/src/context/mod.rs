@@ -79,8 +79,15 @@ pub fn is_browser_exe(exe: &str) -> bool {
     .any(|browser| name.eq_ignore_ascii_case(browser))
 }
 
-/// Map an executable name (lowercase ok) to a spec §7.2 app_category.
-/// Browsers retain "other" in the formatter envelope; layout is handled separately.
+/// Known native terminal hosts. Match basenames, not command or window titles.
+pub fn is_terminal_exe(exe: &str) -> bool {
+    let name = exe.rsplit(['\\', '/']).next().unwrap_or(exe);
+    ["WindowsTerminal.exe", "conhost.exe", "OpenConsole.exe"]
+        .iter()
+        .any(|terminal| name.eq_ignore_ascii_case(terminal))
+}
+
+/// Map an executable to the formatter's app category.
 pub fn category_for_exe(exe: &str) -> &'static str {
     let e = exe.to_ascii_lowercase();
 
@@ -149,6 +156,29 @@ pub fn category_for_exe(exe: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{apply_seam, category_for_exe as cat, seam_mode_for, SeamMode};
+
+    #[test]
+    fn terminal_policy_uses_exact_host_image_names() {
+        for exe in [
+            "WindowsTerminal.exe",
+            "CONHOST.EXE",
+            "OpenConsole.exe",
+            r"C:\Windows\System32\conhost.exe",
+        ] {
+            assert!(super::is_terminal_exe(exe), "{exe}");
+        }
+        for exe in [
+            "Code.exe",
+            "Codex.exe",
+            "hermes.exe",
+            "chrome.exe",
+            "notconhost.exe",
+            "",
+            r"C:\conhost.exe\editor.exe",
+        ] {
+            assert!(!super::is_terminal_exe(exe), "{exe}");
+        }
+    }
 
     #[test]
     fn browser_policy_matches_exact_image_names_and_paths() {

@@ -1,5 +1,12 @@
 # Changes
 
+## 0.2.0-terminal-insertion-20260916
+
+- Fix Hermes CLI dictation being held for manual recovery when terminal output or prompt redraws change the accessibility text around the display cursor. Recognized Windows Terminal and classic console screen controls now allow these changes for ordinary insertion when native focus, pane identity and the input-monitor epoch match, with no active text selection. Document editors retain their existing checks.
+- Keep terminal dictation on one line, including polished/recovered lists, so no Enter or Shift+Enter is sent. Numeric entry stays available. Do not supply terminal scrollback as editable-field context to polishing.
+- Keep terminal receipts unverified for replacement: selecting console output does not select editable input. Restore and spoken replacement remain unavailable there; clipboard recovery is retained. Existing partial-input handling is unchanged.
+- Add regression tests for redraw acceptance, rejection after input/pane/selection changes, exact terminal identification, and generated text-only input events. Add an opt-in read-only test of the installed Windows Terminal accessibility provider.
+
 ## 2026-09-16 — documentation and workspace reconciliation
 
 - Identify this repository as the authoritative maintained source and document the current `0.2.0-browser-prose-20260915` release, all shipped features, architecture, and remaining review findings.

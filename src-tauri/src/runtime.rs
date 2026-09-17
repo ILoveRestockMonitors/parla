@@ -136,7 +136,7 @@ pub fn snapshot() -> serde_json::Value {
         "last_result": s.last, "audio_retry_available": s.audio.is_some(), "error": s.error,
         "device": s.device, "hook_ready": s.hook_ready,
         "input_monitor_ready": crate::hotkey::windows::input_epoch().is_some(),
-        "build_id": concat!(env!("CARGO_PKG_VERSION"), "-browser-prose-20260915")
+        "build_id": concat!(env!("CARGO_PKG_VERSION"), "-terminal-insertion-20260916")
     })
 }
 

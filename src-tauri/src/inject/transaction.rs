@@ -161,7 +161,11 @@ fn copy_candidate_to_clipboard(text: &str) {
 }
 
 fn verify_receipt(before: &TargetSnapshot, after: &TargetSnapshot, text: &str) -> bool {
-    if !before.same_field(after)
+    // Selecting terminal output does not select editable input. Never offer
+    // document-style replacement/Restore based on terminal screen read-back.
+    if before.context.terminal
+        || after.context.terminal
+        || !before.same_field(after)
         || !before.context.available
         || !after.context.available
         || after.context.selected_text.as_deref() != Some("")
@@ -279,6 +283,35 @@ pub fn replace(
 mod tests {
     use super::*;
     use crate::context::target::FieldContext;
+
+    #[test]
+    fn terminal_payload_never_sends_enter_or_control_characters() {
+        for app in ["WindowsTerminal.exe", "conhost.exe", "OpenConsole.exe"] {
+            let payload = crate::formatter::layout::for_app(
+                "Tasks:\r\n• Check status\n• Review changes\tplease ",
+                Some(app),
+            );
+            assert_eq!(payload, "Tasks: Check status, Review changes please ");
+            let mut typed = Vec::new();
+            for step in text_steps(&payload) {
+                assert!(matches!(step, TextStep::Unicode(_)));
+                send_step(&step, |events| {
+                    for input in events {
+                        let key = unsafe { input.Anonymous.ki };
+                        assert_eq!(key.wVk.0, 0);
+                        assert!(key.dwFlags.contains(KEYEVENTF_UNICODE));
+                        assert!(key.wScan >= 0x20);
+                        if !key.dwFlags.contains(KEYEVENTF_KEYUP) {
+                            typed.push(key.wScan);
+                        }
+                    }
+                    events.len() as u32
+                })
+                .unwrap();
+            }
+            assert_eq!(String::from_utf16(&typed).unwrap(), payload);
+        }
+    }
 
     #[test]
     fn browser_grocery_input_contains_text_only_and_no_enter_events() {
@@ -462,6 +495,9 @@ mod tests {
         after.context.selected_text = Some(String::new());
         after.context.text_before = Some("Before Claude ".into());
         assert!(verify_receipt(&before, &after, "Claude "));
+        after.context.terminal = true;
+        assert!(!verify_receipt(&before, &after, "Claude "));
+        after.context.terminal = false;
         after.context.text_before = Some("Before claw ed ".into());
         assert!(!verify_receipt(&before, &after, "Claude "));
         after.context.text_before = Some("Before Claude ".into());

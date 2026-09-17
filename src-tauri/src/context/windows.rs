@@ -18,6 +18,16 @@ pub fn exe_for_window(window: isize) -> Option<String> {
         if pid == 0 {
             return None;
         }
+        exe_for_process(pid)
+    }
+}
+
+/// Also used to identify the owner of a focused accessibility element.
+pub fn exe_for_process(pid: u32) -> Option<String> {
+    if pid == 0 {
+        return None;
+    }
+    unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         let mut buf = vec![0u16; 32768];
         let mut len = buf.len() as u32;
