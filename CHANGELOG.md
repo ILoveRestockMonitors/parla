@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-19 — Windows downloads
+
+- Publish the existing tested `0.2.0-terminal-insertion-20260916` Windows x64 executable as a GitHub Release, with a direct README download link and SHA-256 checksums.
+- Add a ZIP containing the same executable, first-run settings and staged installation/rollback helpers, setup instructions, release provenance, and third-party notices. Speech engines and model weights remain separate downloads.
+- Verify the executable against its original release record and rerun the isolated CLI checks. This distribution update does not change application behavior or replace the installed app.
+
 ## 0.2.0-terminal-insertion-20260916
 
 - Fix Hermes CLI dictation being held for manual recovery when terminal output or prompt redraws change the accessibility text around the display cursor. Recognized Windows Terminal and classic console screen controls now allow these changes for ordinary insertion when native focus, pane identity and the input-monitor epoch match, with no active text selection. Document editors retain their existing checks.

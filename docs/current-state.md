@@ -2,6 +2,8 @@
 
 **Checked: 2026-09-16 · Current application release: `0.2.0-terminal-insertion-20260916`.**
 
+**Download added September 19, 2026:** [Windows x64 executable](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/parla.exe), [ZIP with setup helpers](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-windows-x64.zip), and [installation instructions](windows-download.md). The published executable is the same artifact identified by the SHA-256 below; this packaging update makes no runtime changes. The download needs a separately configured speech engine/model and is unsigned.
+
 The files in this repository are the authoritative maintained source. The embedded source in the [complete build guide](../PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md) is a frozen `0.2.0-reliability-20260908` baseline. Build this repository directly for the current app; do not extract the older appendix over it.
 
 This release adds the Hermes CLI terminal-insertion fix to the September 15 browser-prose release. The earlier September 16 reconciliation changed only documentation and workspace organization; the terminal fix is a separate runtime update recorded in the changelog.

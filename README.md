@@ -2,6 +2,14 @@
 
 Parla is a Windows x64 speech-to-text app inspired by Whisperflow. Press **Ctrl+Space** to start recording, then press it again to finish, or hold **Ctrl+Win** for quick dictation. A small native HUD shows recording and processing status, and a local dashboard provides settings, history, corrections, and recovery controls.
 
+## Download for Windows
+
+**[Download Parla for Windows x64 (.exe)](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/parla.exe)** · **[Download with setup helpers (.zip)](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-windows-x64.zip)**
+
+The prebuilt app requires no Rust compiler or Node.js. For a new installation, download the ZIP and follow the [Windows setup instructions](docs/windows-download.md). Speech recognition also requires a separately installed local engine and model; those large dependencies are not included. The executable is unsigned and Windows may show an unknown-publisher prompt.
+
+[Release notes and checksums](https://github.com/ILoveRestockMonitors/parla/releases/latest) · [Third-party notices](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/THIRD-PARTY-NOTICES.txt)
+
 ## Start here
 
 **Current release: `0.2.0-terminal-insertion-20260916`; source and documentation checked September 16, 2026.** Read [Current state](docs/current-state.md) for the implemented features, test results, and remaining gaps, and [Changes](CHANGELOG.md) for the shipped updates. This repository is the authoritative maintained source.
