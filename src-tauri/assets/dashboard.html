@@ -61,6 +61,18 @@
   footer { margin-top: 16px; color: var(--muted); font-size: 12px;
            font-family: ui-monospace, Consolas, monospace; display:flex; justify-content:space-between; }
   .stale { opacity:.45; }
+  a { color: #b4aaff; text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .setup-heading { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .setup-heading h2 { font-size:17px; font-weight:600; flex:1; }
+  .setup-item { border-top:1px solid var(--border); margin-top:14px; padding-top:14px; }
+  .setup-title { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:600; }
+  .setup-path { overflow-wrap:anywhere; font-family:ui-monospace,Consolas,monospace; font-size:11px; }
+  .setup-links { display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:8px; font-size:13px; }
+  .setup-optional { font-size:11px; color:var(--muted); font-weight:400; }
+  .chip.warn { color:var(--amber); border-color:var(--amber); }
+  details.setup-options { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+  details.setup-options summary { cursor:pointer; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -73,6 +85,19 @@
   </header>
 
   <div class="grid">
+    <section class="card wide" aria-labelledby="setup-heading">
+      <div class="setup-heading"><h2 id="setup-heading">Setup &amp; downloads</h2><button id="check-setup">Recheck tools</button></div>
+      <div class="sub" id="setup-summary" role="status" aria-live="polite">Checking what Parla can find on this PC…</div>
+      <div class="sub">Whisper or Parakeet turns speech into text. Ollama adds optional Polished cleanup; Faithful mode works without it.</div>
+      <div id="setup-items"></div>
+      <details class="setup-options"><summary>Setup instructions and another speech engine</summary>
+        <div class="setup-links">
+          <a href="https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md" target="_blank" rel="noopener noreferrer">Windows setup guide</a>
+          <a href="https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md#optional-parakeet-setup" target="_blank" rel="noopener noreferrer">Set up Parakeet</a>
+        </div>
+        <div class="sub">Downloads open official sites in a new tab. Install or extract the tool, configure its path if needed, then recheck. Restart Parla after changing model paths or installing Python. File checks do not prove a model has loaded; the Speech server card shows readiness.</div>
+      </details>
+    </section>
     <div class="card">
       <div class="label">Speech server</div>
       <div class="big"><span class="chip down" id="asr-chip">down</span><span id="asr-ms"></span></div>
@@ -180,7 +205,7 @@ function render(d) {
   if (active === "parakeet" && !bk.parakeet_alive) {
     noteEl.textContent = "(shim starting\u2026)";
   } else if (!weights && active === "whisper") {
-    noteEl.textContent = "(parakeet needs ONNX weights in %LOCALAPPDATA%\\Temp\\parla-parakeet\\model)";
+    noteEl.textContent = "Use the Parakeet setup link above to install its model and tools.";
   } else {
     noteEl.textContent = "";
   }
@@ -246,7 +271,7 @@ function render(d) {
 window.settingsDirty=false;
 document.querySelectorAll("#cleanup-mode,#retain-audio,#retry-seconds,#chimes-enabled,#hud-enabled").forEach(e=>e.addEventListener("input",()=>window.settingsDirty=true));
 async function postJson(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-Parla-Control":"1"},body:JSON.stringify(body)});let d={};try{d=await r.json()}catch(_){}if(!r.ok)throw new Error(d.error||"request failed");return d;}
-$("save-settings").onclick=async()=>{try{await postJson("/api/settings",{cleanup_mode:$("cleanup-mode").value,retain_audio_for_retry:$("retain-audio").checked,retry_audio_seconds:Number($("retry-seconds").value),chimes_enabled:$("chimes-enabled").checked,hud_enabled:$("hud-enabled").checked});$("settings-error").textContent="Saved";window.settingsDirty=false;poll()}catch(e){$("settings-error").textContent=e.message}};
+$("save-settings").onclick=async()=>{try{await postJson("/api/settings",{cleanup_mode:$("cleanup-mode").value,retain_audio_for_retry:$("retain-audio").checked,retry_audio_seconds:Number($("retry-seconds").value),chimes_enabled:$("chimes-enabled").checked,hud_enabled:$("hud-enabled").checked});$("settings-error").textContent="Saved";window.settingsDirty=false;poll();checkSetup()}catch(e){$("settings-error").textContent=e.message}};
 $("learn").onclick=async()=>{try{await postJson("/api/command",{command:"learn",alias:$("alias").value,canonical:$("canonical").value});$("settings-error").textContent="Correction queued; check status for errors"}catch(e){$("settings-error").textContent=e.message}};
 $("restore").onclick=async()=>{try{await postJson("/api/command",{command:"restore"});$("settings-error").textContent="Restore requested"}catch(e){$("settings-error").textContent=e.message}};
 
@@ -268,7 +293,49 @@ async function poll() {
   }
 }
 
-$("refresh").addEventListener("click", poll);
+const SETUP_LABELS = {ready:"Ready",found:"Found",not_found:"Not found at configured location",not_detected:"Not detected",not_running:"Not responding",unchecked:"Not checked yet",check_failed:"Could not verify"};
+function renderSetup(data) {
+  const items = data.items;
+  if (!Array.isArray(items)) throw new Error("Setup response unavailable");
+  const missing = items.filter(item=>item.required && !["ready","found"].includes(item.state));
+  $("setup-summary").textContent = missing.length
+    ? `${missing.length} setup ${missing.length===1?"item needs":"items need"} attention for ${data.cleanup_mode==="polished"?"Polished":"Faithful"} mode. Follow the links below, then recheck.`
+    : "Required files and tools were found. Check Speech server readiness before dictating.";
+  $("setup-items").replaceChildren();
+  for (const item of items) {
+    const row=document.createElement("div"); row.className="setup-item"; row.dataset.tool=item.id;
+    const title=document.createElement("div"); title.className="setup-title";
+    const name=document.createElement("span"); name.textContent=item.title; title.append(name);
+    const chip=document.createElement("span"); chip.className="chip "+(["ready","found"].includes(item.state)?"up":item.required?"warn":"");
+    chip.textContent=SETUP_LABELS[item.state]||"Unknown"; title.append(chip);
+    if (!item.required) { const optional=document.createElement("span"); optional.className="setup-optional"; optional.textContent="Optional in Faithful"; title.append(optional); }
+    row.append(title);
+    const detail=document.createElement("p"); detail.className="sub"; detail.textContent=item.detail; row.append(detail);
+    if(item.path) { const path=document.createElement("p"); path.className="sub setup-path"; path.textContent="Parla checks: "+item.path; row.append(path); }
+    const links=document.createElement("div"); links.className="setup-links";
+    for(const link of (["ready","found"].includes(item.state)?[]:item.links||[])) {
+      let url; try {url=new URL(link.url)} catch(_){continue}
+      if(url.protocol!=="https:" || !["github.com","huggingface.co","ollama.com","www.python.org","k2-fsa.github.io"].includes(url.hostname)) continue;
+      const anchor=document.createElement("a"); anchor.href=url.href; anchor.textContent=link.label; anchor.target="_blank"; anchor.rel="noopener noreferrer"; links.append(anchor);
+    }
+    row.append(links); $("setup-items").append(row);
+  }
+}
+let setupChecking=false;
+async function checkSetup() {
+  if(setupChecking)return;
+  setupChecking=true; $("check-setup").disabled=true;
+  $("setup-summary").textContent="Checking installed tools and model files…";
+  try {
+    const response=await fetch("/api/setup",{cache:"no-store"});
+    if(!response.ok)throw new Error("Setup check failed");
+    renderSetup(await response.json());
+  } catch(_) {
+    $("setup-summary").textContent="Could not check this PC. Start the updated Parla app and recheck. The setup guide below remains available.";
+  } finally {setupChecking=false; $("check-setup").disabled=false;}
+}
+$("check-setup").addEventListener("click",checkSetup);
+$("refresh").addEventListener("click",()=>{poll();checkSetup()});
 
 async function flipBackend(name) {
   try {
@@ -281,6 +348,7 @@ async function flipBackend(name) {
     if (!r.ok) { $("backend-note").textContent = d.error || "flip failed"; return; }
   } catch (e) { $("backend-note").textContent = "flip failed: " + e; }
   poll();
+  checkSetup();
 }
 async function command(name) {
   try { await postJson("/api/command",{command:name}); poll(); }
@@ -293,6 +361,7 @@ $("btn-whisper").addEventListener("click", () => flipBackend("whisper"));
 $("btn-parakeet").addEventListener("click", () => flipBackend("parakeet"));
 
 poll();
+checkSetup();
 setInterval(poll, 5000);
 </script>
 </body>

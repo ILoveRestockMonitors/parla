@@ -4,6 +4,7 @@
 
 mod asr;
 mod audio;
+mod bundle;
 mod cli;
 mod command;
 mod context;
@@ -16,10 +17,22 @@ mod inject;
 mod ipc;
 mod pipeline;
 mod runtime;
+mod setup;
 mod store;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--initialize-bundle") {
+        if let Err(error) = bundle::initialize_settings() {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if args.iter().any(|a| a == "--check-setup") {
+        println!("{}", setup::inspect(&store::settings::Settings::load()));
+        return;
+    }
     #[cfg(windows)]
     if let Some(i) = args.iter().position(|a| a == "--preview-feedback") {
         let Some(directory) = args.get(i + 1) else {
@@ -65,17 +78,22 @@ fn main() {
     if let Some(code) = cli::run(&args) {
         std::process::exit(code);
     }
-    run_live();
+    run_live(args.iter().any(|a| a == "--dashboard"));
 }
 
-fn run_live() {
+fn run_live(open_dashboard: bool) {
     unsafe {
         use windows::core::PCWSTR;
         use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
         use windows::Win32::System::Threading::CreateMutexW;
         let name: Vec<u16> = "Local\\Parla.SingleInstance.v1\0".encode_utf16().collect();
         match CreateMutexW(None, false, PCWSTR(name.as_ptr())) {
-            Ok(_) if GetLastError() == ERROR_ALREADY_EXISTS => return,
+            Ok(_) if GetLastError() == ERROR_ALREADY_EXISTS => {
+                if open_dashboard {
+                    dashboard::open_in_browser();
+                }
+                return;
+            }
             Ok(_) => {}
             Err(e) => {
                 eprintln!("[parla] cannot establish single instance: {e}");
@@ -87,8 +105,17 @@ fn run_live() {
     runtime::init(settings.clone());
     hud::spawn();
     hotkey::windows::set_hotkeys(settings.hotkey_chords(), settings.toggle_hotkey_chord());
-    if let Err(e) = dashboard::spawn() {
-        runtime::update(|s| s.error = Some(e));
+    match dashboard::spawn() {
+        Err(e) => runtime::update(|s| s.error = Some(e)),
+        Ok(()) => {
+            let configured =
+                std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default())
+                    .join("Parla/settings.json")
+                    .is_file();
+            if !configured || open_dashboard {
+                dashboard::open_in_browser();
+            }
+        }
     }
     asr::set_backend(settings.asr_backend_kind());
     std::thread::spawn(|| {

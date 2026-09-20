@@ -17,6 +17,25 @@ const MAX_BODY: usize = 128 * 1024;
 static ACTIVE: AtomicUsize = AtomicUsize::new(0);
 static SETTINGS_WRITE: Mutex<()> = Mutex::new(());
 
+pub fn open_in_browser() {
+    #[cfg(windows)]
+    unsafe {
+        use windows::core::{w, PCWSTR};
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        // Fixed localhost URL only. No downloaded content or settings become commands.
+        let _ = ShellExecuteW(
+            HWND(0),
+            w!("open"),
+            w!("http://127.0.0.1:9393/"),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        );
+    }
+}
+
 /// Start the server on a detached thread; returns immediately.
 /// Port-busy is surfaced to the caller (run_live decides whether it's fatal).
 pub fn spawn() -> Result<(), String> {
@@ -220,6 +239,11 @@ fn handle(mut stream: TcpStream, started: Instant) {
     let (status, ctype, body) = match path.as_str() {
         "/" | "/index.html" => ("200 OK", "text/html; charset=utf-8", HTML.to_string()),
         "/api/status" => ("200 OK", "application/json", status_json(started)),
+        "/api/setup" => (
+            "200 OK",
+            "application/json",
+            crate::setup::inspect(&crate::store::settings::Settings::load()).to_string(),
+        ),
         _ => (
             "404 Not Found",
             "text/plain; charset=utf-8",

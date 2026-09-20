@@ -1,19 +1,19 @@
 # Parla current state
 
-**Checked: 2026-09-16 · Current application release: `0.2.0-terminal-insertion-20260916`.**
+**Checked: 2026-09-19 · Current application release: `0.2.0-bundled-20260919`.**
 
-**Download added September 19, 2026:** [Windows x64 executable](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/parla.exe), [ZIP with setup helpers](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-windows-x64.zip), and [installation instructions](windows-download.md). The published executable is the same artifact identified by the SHA-256 below; this packaging update makes no runtime changes. The download needs a separately configured speech engine/model and is unsigned.
+**[Download the Windows x64 installer](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-Setup.exe)** — about 963 MB, containing Parakeet, Whisper, both speech models, and private Python dependencies. It installs about 1.3 GB without additional speech downloads. See [installation instructions](windows-download.md). The installer and app are unsigned.
 
 The files in this repository are the authoritative maintained source. The embedded source in the [complete build guide](../PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md) is a frozen `0.2.0-reliability-20260908` baseline. Build this repository directly for the current app; do not extract the older appendix over it.
 
-This release adds the Hermes CLI terminal-insertion fix to the September 15 browser-prose release. The earlier September 16 reconciliation changed only documentation and workspace organization; the terminal fix is a separate runtime update recorded in the changelog.
+This release adds offline installer support, fresh-install settings, dashboard launch shortcuts, and dependency diagnostics to the September 16 terminal-insertion runtime. It does not change dictation formatting or insertion rules. Fresh installs use bundled Parakeet and Faithful cleanup; existing settings are preserved. Ollama remains optional.
 
 ## Current behavior
 
 | Area | Implemented behavior |
 | --- | --- |
 | Recording | Ctrl+Space starts/stops recording; Ctrl then Win is hold-to-talk. Sessions and outstanding work are bounded. |
-| Recognition | Local Whisper server or optional local Parakeet Python/sherpa-onnx service. |
+| Recognition | Bundled local Parakeet Python/sherpa-onnx service by default; bundled Whisper server is available as an alternative. |
 | Dictionary | Explicit spelling replacements and preferred casing, applied after recognition. Whisper also receives vocabulary hints; the Parakeet client currently ignores hotword hints. |
 | Faithful | Preserves recognized wording with dictionary corrections and the requested automatic numeric/list formatting. |
 | Polished | Optional local Ollama cleanup, collected and checked before insertion. Rejected edits fall back to normalized wording. |
@@ -26,7 +26,8 @@ This release adds the Hermes CLI terminal-insertion fix to the September 15 brow
 | Recovery | Best-effort clipboard backup, dashboard raw/normalized/final text, optional short-lived in-memory retry audio, and exact-range checks for restoring or replacing an insertion. |
 | Feedback | Soft chimes and a native, click-through recording/processing HUD. It hides when idle. |
 | Controls | Embedded local HTML dashboard on port 9393, settings, history options, learned corrections, and restore/retry controls. |
-| Packaging | Versioned executables, checksums, staged installation, and rollback helpers. |
+| Packaging | Per-user offline Setup.exe, desktop/Start shortcuts, automatic fresh settings, pinned dependencies and model hashes, license notices, and uninstall preserving user data. Source-build staging and rollback helpers remain available. |
+| Setup checks | Read-only dependency checks on dashboard load or recheck, official missing-tool links, optional Ollama detection and downloaded-model checks. File presence and speech-server readiness are reported separately. |
 
 See [CHANGELOG.md](../CHANGELOG.md) for the individual September 8 and September 15 changes, including the return to automatic typing, field-boundary fixes, numeric phrases, refined HUD/chimes, lists, multiline handling, and browser behavior.
 
@@ -38,7 +39,18 @@ This is a Rust Windows application with local HTTP model services. The `src-taur
 
 ## Verification
 
-On September 16, the current repository passed:
+On September 19, the bundled release passed:
+
+- **129 Rust tests, 0 failed, 4 opt-in live tests ignored**, an optimized GNU build, and **3 isolated CLI smoke checks**.
+- Parakeet and Whisper transcription of the public speech fixture shipped by sherpa-onnx. Tests used the packaged Python and speech executables, a restricted system-only PATH, ephemeral local ports, and isolated user data. No microphone recording or automatic typing was performed.
+- Silent installation into an isolated path containing spaces, first-run bundled settings, hash checks of all **1,014 manifest files**, model transcription from the installed directory, and uninstall retaining the personal settings file. This was a test installation on the development PC; it did not replace the maintainer's running app.
+- Browser inspection of the actual dashboard with fixture responses, including dependency readiness, an optional missing Ollama link, and the Recheck tools control.
+
+These tests do not establish clean-machine, every-CPU, microphone, or editor compatibility. A clean Windows VM and signed-distribution test were not performed. Full release download hashes and the installed-file manifest are published with the installer; the Rust executable still embeds a release label rather than a Git commit.
+
+### Earlier live workflow validation
+
+On September 16, the terminal-insertion release passed:
 
 - Rust suite: **122 passed, 0 failed, 4 ignored**. Ignored tests require explicitly invoked live accessibility/HUD checks.
 - Optimized Windows GNU release build and **3 CLI checks passed**.
@@ -67,6 +79,6 @@ These are review findings and proposed improvements, **not implemented fixes**:
 - Saved settings, startup configuration, and the runtime's reported settings can diverge. Some changes need reopening a device or restarting the app.
 - One last-result slot and one retry clip are retained. A later result can displace failed-result recovery; the idle HUD does not display errors.
 - Deterministic formatting and optional polishing need clearly documented, distinct validation policies. Preserve the requested numbers/lists/browser behavior while improving those policies.
-- Source hashes in builds, model-content manifests, and removal of unused scaffolding remain future work.
+- Embedding source commit hashes in builds and removal of unused scaffolding remain future work. The bundled installer now supplies a model-content and installed-file manifest.
 
 See the [September 16 architecture assessment](architecture-review-2026-09-16.md) for the evidence and qualifications.

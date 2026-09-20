@@ -1,5 +1,13 @@
 # Changes
 
+## 0.2.0-bundled-20260919
+
+- Add a per-user Windows `Parla-Setup.exe` containing Parla, Parakeet TDT 0.6B v2 INT8, Whisper small, both CPU speech engines, and a private Python runtime with sherpa-onnx and NumPy. Basic Faithful dictation needs no additional downloads or Ollama installation.
+- Create fresh settings pointing to the installed models, defaulting to Parakeet and Faithful. Preserve existing settings. Keep generated Parakeet code/logs in user data; desktop and Start menu shortcuts open the dashboard.
+- Add dashboard setup diagnostics and official download links for missing configured dependencies. Distinguish optional Ollama from required speech tools and check downloaded polishing models through Ollama's tags endpoint.
+- Build Whisper with static compiler runtimes and a portable CPU baseline, avoiding a separate Visual C++ or CUDA installation. Publish pinned sources, checksums, installed-file manifest, and model attribution.
+- Verify 129 Rust tests, three CLI smoke checks, actual bundled-model transcription, and isolated installer extraction/uninstallation with personal settings retained. The unsigned installer was tested on the development PC, not a clean Windows VM.
+
 ## 2026-09-19 — Windows downloads
 
 - Publish the existing tested `0.2.0-terminal-insertion-20260916` Windows x64 executable as a GitHub Release, with a direct README download link and SHA-256 checksums.

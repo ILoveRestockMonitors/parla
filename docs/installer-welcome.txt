@@ -1,0 +1,13 @@
+Parla - local dictation for Windows
+
+This installer includes Parla, the Parakeet and Whisper speech engines, both speech models, and a private Python runtime. You do not need to install Python, CUDA, Ollama, or any speech models separately for basic dictation.
+
+After installation, open Parla from your desktop or Start menu. Its dashboard opens in your browser. Wait for the speech engine to become ready, click the field you want to dictate into, press Ctrl+Space, speak, then press Ctrl+Space again.
+
+The default is Parakeet with Faithful cleanup. Whisper is available as an alternative in the dashboard. Processing stays on this computer. First model loading may take a few seconds. Allow microphone access for desktop applications if Windows asks.
+
+Ollama is optional and is not included. It is used only if you choose Polished cleanup; the dashboard provides its download and setup links.
+
+Parla installs for your Windows account without administrator access. Settings, dictionary, history, and runtime logs live separately under LocalAppData\Parla. Existing personal settings are preserved. Uninstalling the app keeps that personal data.
+
+The Windows app and installer are unsigned. Speech-recognition accuracy and editor compatibility vary. Third-party notices and model attribution are included in the installation folder.

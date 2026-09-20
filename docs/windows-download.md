@@ -1,83 +1,62 @@
-# Install the Windows download
+# Install Parla for Windows
 
-**[Download Parla (.exe)](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/parla.exe)** · **[Download Parla with setup helpers (.zip)](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-windows-x64.zip)**
+**[Download Parla Setup.exe](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-Setup.exe)**
 
-Release: `0.2.0-terminal-insertion-20260916`, Windows x64. The download contains the tested native application, including the terminal insertion fix. You do not need Rust, GCC, Node.js, or a source checkout to use it. The EXE is the app, not an installer: a local speech engine and model must be configured before dictation works. The ZIP supplies the setup helpers used below.
+The Windows x64 installer includes Parla, Parakeet and Whisper, both speech models, and a private Python runtime. Basic dictation requires no separate downloads, Python installation, GPU software, Ollama, or account. Installation and Faithful dictation can run offline after downloading the installer.
 
-## 1. Download and extract
+## Install and dictate
 
-Download `Parla-windows-x64.zip`, choose **Extract All**, and open Windows PowerShell in the extracted folder containing `parla.exe`. Keep that folder until installation is complete.
+1. Run `Parla-Setup.exe` and complete the wizard. It installs for your Windows account and offers desktop and Start menu shortcuts.
+2. Leave **Open Parla** selected on the final page, or use either shortcut. Parla starts in the background and opens its dashboard in your browser.
+3. Wait for **Speech server** to show **live**. The default is Parakeet with Faithful cleanup; initial model loading can take a few seconds.
+4. Click a text field, press **Ctrl+Space**, speak, then press **Ctrl+Space** again. You can also hold **Ctrl+Win** while speaking. Permit microphone access for desktop apps in Windows if necessary.
 
-The [release page](https://github.com/ILoveRestockMonitors/parla/releases/latest) includes `SHA256SUMS.txt` for the download assets. To check the extracted executable against its included checksum:
+The installer places about 1.3 GB of files under `%LOCALAPPDATA%\Programs\Parla`. Recognition runs on the CPU. Speed and accuracy depend on your computer and speech. Whisper is also included and can be selected from the dashboard.
 
-```powershell
-$Expected = ((Get-Content -LiteralPath .\SHA256.txt -TotalCount 1) -split '\s+')[0]
-$Actual = (Get-FileHash -LiteralPath .\parla.exe -Algorithm SHA256).Hash
-if ($Actual -ne $Expected) { throw 'Checksum mismatch; download a fresh copy.' }
-```
+The app and installer are unsigned, so Windows may show an unknown-publisher prompt. Use the linked GitHub release; its `SHA256SUMS.txt` records download checksums. Do not disable Windows security protections.
 
-The executable is unsigned; Windows may show an unknown-publisher or SmartScreen prompt. Obtain it from the linked repository release. Do not disable Windows security protections. Checksums detect changed downloads but are not a publisher signature.
+## What is included
 
-## 2. Set up local speech recognition
+| Component | Included |
+| --- | --- |
+| Parla native app and dashboard | Yes |
+| Parakeet TDT 0.6B v2 INT8 model | Yes; default speech model |
+| Python 3.12.10, sherpa-onnx/core 1.13.7, NumPy 2.4.6 | Yes; private to Parla |
+| whisper.cpp v1.8.7 CPU server and Whisper small model | Yes; alternative speech engine |
+| Ollama and a polishing model | Optional; separate installation |
 
-If you already use Parla with working settings, keep those settings and skip to step 3. For a new installation:
+The models are carried inside `Setup.exe` and extracted into Parla's installation folder. The app loads them from disk; they are not downloaded on first launch. Private Python does not change system Python or PATH. The Whisper server includes its compiler runtimes and does not require a separate Visual C++ installation.
 
-1. Download a Windows x64 distribution from [whisper.cpp releases](https://github.com/ggml-org/whisper.cpp/releases) that includes **`whisper-server.exe`**, and extract it with all of its matching DLLs. CPU builds avoid requiring CUDA. A package containing only `whisper-cli.exe` cannot serve Parla.
-2. Download **`ggml-small.bin`** from the [Whisper ggml model repository](https://huggingface.co/ggerganov/whisper.cpp). Keep the server and model in a durable location, such as `%LOCALAPPDATA%\Parla\engines\whisper` and `%LOCALAPPDATA%\Parla\models\whisper`.
-3. Run the settings helper from the extracted Parla download. Replace the example paths with the actual files:
+## Optional polishing with Ollama
 
-```powershell
-$WhisperExe = 'C:\path\to\whisper-server.exe'
-$WhisperModel = 'C:\path\to\ggml-small.bin'
-& $WhisperExe --help
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\initialize-settings.ps1 -WhisperServerExe $WhisperExe -WhisperModelPath $WhisperModel
-if ($LASTEXITCODE -ne 0) { throw 'Settings initialization failed.' }
-```
+**Faithful** works without Ollama. For **Polished** cleanup, install [Ollama for Windows](https://ollama.com/download/windows), open it, and download the exact model named in Parla's **Setup & downloads** panel. Its model-library link helps locate that model. Select Polished in Settings when ready.
 
-Keep the server's own license files with its distribution. If `--help` reports missing DLLs, repair that distribution before continuing. The settings helper refuses to overwrite existing settings. It enables Faithful mode and 24-hour auto-delete history; add `-HistoryMode never` to disable new transcript-history writes. No Ollama model is required for Faithful mode. Python is needed only if you choose the optional Parakeet recognition backend.
+The setup panel checks whether Ollama is responding and whether its configured model is downloaded. A stopped service is not treated as proof that the model is missing. Polishing failures preserve the recognized wording and report a warning.
 
-For optional Parakeet or Ollama, use the [complete guide](https://github.com/ILoveRestockMonitors/parla/blob/main/PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md#10-optional-parakeet-backend). Skip its source extraction/build steps and retain the release version below.
+## Updates and personal data
 
-## 3. Install the app and launchers
+Finish active dictation and close Parla before updating the same installation folder. The installer does not force-stop the running app. Existing settings are preserved, including deliberately configured external speech engines/models. Included engines are selected automatically for a fresh installation.
 
-Run from the extracted Parla folder in a normal, non-administrator PowerShell window:
+Settings, dictionary, history, and runtime logs remain under `%LOCALAPPDATA%\Parla`. Default history expires after 24 hours. Uninstall from Windows **Installed apps**. Uninstallation removes the app and bundled models while retaining personal data. Reinstalling can reuse those settings.
 
-```powershell
-$Release = (Get-Location).Path
-$BuildId = '0.2.0-terminal-insertion-20260916'
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-rollback.ps1 -ReleaseDirectory $Release -Action Prepare -Version $BuildId
-if ($LASTEXITCODE -ne 0) { throw 'Release staging failed.' }
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-rollback.ps1 -ReleaseDirectory $Release -Action Activate -Version $BuildId
-if ($LASTEXITCODE -ne 0) { throw 'Launcher activation failed.' }
-& (Join-Path $env:LOCALAPPDATA 'Parla\parla.bat')
-```
+## Troubleshooting and manual installations
 
-This installs the executable under `%LOCALAPPDATA%\Parla\releases\<version>` and creates `parla.bat` and `parla-turbo.bat` in `%LOCALAPPDATA%\Parla`. The normal launcher starts Parla and opens its dashboard at **http://127.0.0.1:9393/**. You can make a desktop shortcut to `parla.bat` for subsequent launches. Turbo needs its own separately downloaded large-v3-turbo model; use the normal launcher initially.
+**Setup & downloads** identifies missing configured files and provides official download/setup links. Recheck after changes. File presence does not prove that a model has loaded; use Speech server status for readiness. Restart after changing model paths or installing an external Python environment.
 
-An already-running Parla instance remains running. When upgrading, finish recording/processing, close only the existing Parla process in Task Manager, and then launch the newly staged version. Settings and dictionaries remain in `%LOCALAPPDATA%\Parla`; the download contains no personal settings, recordings, history, or dictionary database. Previous launchers are backed up for rollback.
+For an advanced manual Whisper installation, obtain [whisper.cpp](https://github.com/ggml-org/whisper.cpp/releases) and [ggml-small.bin](https://huggingface.co/ggerganov/whisper.cpp), then use `scripts/initialize-settings.ps1` with their actual full paths. This is unnecessary for a fresh bundled installation.
 
-## 4. Try dictation
+### Optional Parakeet setup
 
-In the dashboard, check that the microphone, keyboard shortcut, and speech engine are ready. Windows must permit microphone access for desktop applications. In a disposable Notepad document, press **Ctrl+Space**, speak, and press it again to finish; or hold **Ctrl+Win** while speaking. The first speech-engine load may take longer. If recognition is unavailable, check the dashboard's error and configured server/model paths.
-
-Keep the dashboard and model services on localhost. Ordinary application compatibility and recognition quality depend on the computer, model, and target editor; the published checks do not cover every environment.
-
-## Roll back launchers
-
-From the extracted ZIP folder:
+The installer already contains Parakeet. For an advanced manual installation only, use [Python for Windows](https://www.python.org/downloads/windows/) with Python 3.12 x64 and the matching [Parakeet TDT 0.6B v2 INT8 model](https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-transducer/nemo-transducer-models.html).
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-rollback.ps1 -Action Rollback -Version '0.2.0-terminal-insertion-20260916'
-if ($LASTEXITCODE -ne 0) { throw 'Launcher rollback failed.' }
+py -3.12 -m venv "$env:LOCALAPPDATA\Parla\venv"
+& "$env:LOCALAPPDATA\Parla\venv\Scripts\python.exe" -m pip install 'sherpa-onnx==1.13.7' 'numpy==2.4.6'
+$env:PARLA_PARAKEET_PYTHON = "$env:LOCALAPPDATA\Parla\venv\Scripts\python.exe"
 ```
 
-Rollback restores the previous launchers, or removes launchers that did not exist before activation. It does not stop processes or delete settings, models, dictionaries, or staged executables. Close the current Parla process between dictations before launching a previous version.
+Put matching `encoder.int8.onnx`, `decoder.int8.onnx`, `joiner.int8.onnx`, and `tokens.txt` directly in the configured `parakeet_model_dir`. Launch Parla from that shell to use the explicit interpreter override. Installer builds otherwise prefer their private interpreter. The historical guide's `PYTHON` variable is superseded by `PARLA_PARAKEET_PYTHON`.
 
-## Release identity
+## Verification and provenance
 
-- Binary source commit: [`e0634eed28c13c9ad30a333742814f5790b440ae`](https://github.com/ILoveRestockMonitors/parla/commit/e0634eed28c13c9ad30a333742814f5790b440ae).
-- EXE SHA-256: `1E533933A359E07B2EE63ADB9C95F48C8B9A5454744402DC48ADDE9F774BF443`.
-- Original release verification: 122 Rust tests passed, 4 opt-in tests ignored; 3 CLI checks and the read-only terminal-provider check passed; the owner confirmed 5/5 successful Hermes dictations.
-- Download verification: original executable hash and Windows x64 format checked; the isolated CLI checks rerun against the packaged executable. No new live microphone or application-insertion test is implied.
-
-The ZIP includes `RELEASE.json` and `THIRD-PARTY-NOTICES.txt`. See the [current state](https://github.com/ILoveRestockMonitors/parla/blob/main/docs/current-state.md) for known application limitations.
+The release's `bundle-manifest.json` records installed-file hashes and pinned download sources. Model attribution and third-party notices are installed alongside the app. See [current state](current-state.md) and the [changelog](../CHANGELOG.md) for verification and known limitations.

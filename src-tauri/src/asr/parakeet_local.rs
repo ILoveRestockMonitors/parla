@@ -67,12 +67,23 @@ impl ParakeetClient {
         }
     }
 
-    /// Deploy shim.py next to the model dir (self-contained runtime folder).
-    pub fn ensure_shim_deployed(&self) -> Result<std::path::PathBuf, String> {
-        let root = std::path::Path::new(&self.model_dir)
+    pub fn runtime_directory(&self) -> Result<std::path::PathBuf, String> {
+        if crate::bundle::installed().is_some() {
+            return Ok(std::path::PathBuf::from(
+                std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA unavailable")?,
+            )
+            .join("Parla/runtime/parakeet"));
+        }
+        std::path::Path::new(&self.model_dir)
             .parent()
-            .ok_or("parakeet model dir has no parent")?;
-        std::fs::create_dir_all(root).map_err(|e| format!("mkdir {root:?}: {e}"))?;
+            .map(|p| p.to_path_buf())
+            .ok_or_else(|| "parakeet model dir has no parent".into())
+    }
+
+    /// Bundled installations keep generated code/logs outside installed models.
+    pub fn ensure_shim_deployed(&self) -> Result<std::path::PathBuf, String> {
+        let root = self.runtime_directory()?;
+        std::fs::create_dir_all(&root).map_err(|e| format!("mkdir {root:?}: {e}"))?;
         let dst = root.join("shim.py");
         let bytes = include_bytes!("../../assets/parakeet-shim.py");
         if std::fs::read(&dst).ok().as_deref() != Some(bytes) {

@@ -217,22 +217,39 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         let la = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let bundle = crate::bundle::installed();
         Self {
             schema_version: 2,
             ptt_chords: vec!["ctrl+win".into()],
             toggle_chord: default_toggle_chord(),
-            asr_model_path: format!("{}\\Temp\\parla-models\\ggml-small.bin", la),
-            asr_server_exe: format!(
-                "{}\\Temp\\parla-whisper\\bin-cublas\\Release\\whisper-server.exe",
-                la
-            ),
+            asr_model_path: bundle
+                .as_ref()
+                .map(|b| b.whisper_model.clone())
+                .unwrap_or_else(|| format!("{}\\Temp\\parla-models\\ggml-small.bin", la)),
+            asr_server_exe: bundle
+                .as_ref()
+                .map(|b| b.whisper.clone())
+                .unwrap_or_else(|| {
+                    format!(
+                        "{}\\Temp\\parla-whisper\\bin-cublas\\Release\\whisper-server.exe",
+                        la
+                    )
+                }),
             formatter_port: 11434,
             formatter_model: "qwen3.5:9b".into(),
             formatter_num_ctx: 2048,
             history_mode: "auto_delete_24h".into(),
             chimes_enabled: default_chimes_enabled(),
-            asr_backend: "whisper".into(),
-            parakeet_model_dir: default_parakeet_dir(),
+            asr_backend: if bundle.is_some() {
+                "parakeet"
+            } else {
+                "whisper"
+            }
+            .into(),
+            parakeet_model_dir: bundle
+                .as_ref()
+                .map(|b| b.parakeet_model.clone())
+                .unwrap_or_else(default_parakeet_dir),
             cleanup_mode: default_cleanup_mode(),
             max_recording_seconds: default_max_recording_seconds(),
             max_pending_utterances: default_max_pending_utterances(),

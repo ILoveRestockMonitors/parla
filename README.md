@@ -4,15 +4,15 @@ Parla is a Windows x64 speech-to-text app inspired by Whisperflow. Press **Ctrl+
 
 ## Download for Windows
 
-**[Download Parla for Windows x64 (.exe)](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/parla.exe)** · **[Download with setup helpers (.zip)](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-windows-x64.zip)**
+**[Download Parla Setup.exe for Windows x64](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-Setup.exe)**
 
-The prebuilt app requires no Rust compiler or Node.js. For a new installation, download the ZIP and follow the [Windows setup instructions](docs/windows-download.md). Speech recognition also requires a separately installed local engine and model; those large dependencies are not included. The executable is unsigned and Windows may show an unknown-publisher prompt.
+The installer includes **Parakeet, Whisper, both speech models, and a private Python runtime**. Install, open the desktop shortcut, and dictate; no separate speech downloads, Python, CUDA, Rust, Node.js, or Ollama are required for Faithful mode. The dashboard opens automatically and includes setup checks and optional-tool links. See the [Windows installation guide](docs/windows-download.md). The app and installer are unsigned; Windows may show an unknown-publisher prompt.
 
 [Release notes and checksums](https://github.com/ILoveRestockMonitors/parla/releases/latest) · [Third-party notices](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/THIRD-PARTY-NOTICES.txt)
 
 ## Start here
 
-**Current release: `0.2.0-terminal-insertion-20260916`; source and documentation checked September 16, 2026.** Read [Current state](docs/current-state.md) for the implemented features, test results, and remaining gaps, and [Changes](CHANGELOG.md) for the shipped updates. This repository is the authoritative maintained source.
+**Current release: `0.2.0-bundled-20260919`; source and documentation checked September 19, 2026.** Read [Current state](docs/current-state.md) for the implemented features, test results, and remaining gaps, and [Changes](CHANGELOG.md) for the shipped updates. This repository is the authoritative maintained source.
 
 **[Complete shareable build guide](PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md)** — detailed prerequisites, exact commands, architecture, implementation contracts, troubleshooting, tests, installation, and rollback. The guide also contains a checksummed source snapshot and a Python extractor, so the single Markdown file can be shared independently of this repository.
 
@@ -22,7 +22,7 @@ If you clone this repository, skip the guide's extraction step and build the rep
 
 Automatic insertion uses Unicode typing. Before an ordinary insertion attempt, Parla also makes a best-effort clipboard copy; a busy clipboard does not block typing. The HUD shows recording/processing and disappears when idle. A failed accessibility check can use the same native field when the input monitor confirms no intervening typing or clicks; verified restore operations still require exact text checks.
 
-- Local recognition through whisper.cpp, with optional Parakeet through a local Python/sherpa-onnx service.
+- Local recognition through bundled Parakeet, with bundled whisper.cpp available as an alternative.
 - **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections and the automatic numeric/list behavior described below.
 - Clear lists automatically become separate bullet lines in writing apps such as Codex, in both cleanup modes. Say "I need eggs, milk, bread, and cheese pizza" or "First, call Alex. Second, review the quote." Introductions stay above the list; multiword items stay together. Natural pauses help recognition add item separators. Unclear boundaries stay as spoken text, and code editors keep ordinary dictation.
 - Browser dictation defaults to normal sentences on one line, including address/search bars and page editors. Chrome, Edge, Firefox, Brave, Opera, Vivaldi and other recognized browsers receive text without Enter or Shift+Enter, so dictation does not submit searches or navigate between list items. Recovered or polished multiline text is flattened before typing; numeric entry still works normally. You submit the text yourself.
@@ -45,6 +45,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-release.
 ```
 
 Replace the compiler path with the actual folder containing `gcc.exe` and `ar.exe`. The build script runs the Rust tests, builds an optimized executable, and creates a versioned folder under `release` containing the executable and its SHA-256 checksum. It uses locked, offline dependencies after the fetch step.
+
+To create the complete offline installer, follow [Building the Windows installer](docs/windows-installer-build.md). The commands below are for an advanced manual installation of the standalone source build.
 
 Download whisper.cpp's server and a compatible model as described in the guide. Initialize settings using actual paths:
 
@@ -69,6 +71,6 @@ This first-run script refuses to overwrite existing settings. Follow the guide's
 
 ## Verification and limitations
 
-The current source passed **122 Rust tests (0 failed, 4 opt-in live tests ignored)**, an optimized Windows GNU build, and three CLI smoke checks on September 16, 2026. The read-only Windows Terminal provider test was then run explicitly and passed. Five controlled shim HTTP tests passed before this insertion-only update. The guide's 85-test result refers to its older embedded baseline. See [Current state](docs/current-state.md) for verification scope and the distinction between code checks and live application behavior. These results do not guarantee recognition accuracy or compatibility with every editor.
+The current source passed **129 Rust tests (0 failed, 4 opt-in live tests ignored)**, an optimized Windows GNU build, and three CLI smoke checks on September 19, 2026. Both packaged speech engines transcribed a public test recording with system Python and developer tools excluded from their search path. The installer was checked in an isolated directory on the development PC, including installed-file hashes and preservation of personal settings during uninstall. See [Current state](docs/current-state.md) for scope and earlier live application checks. These results do not establish compatibility with every PC or editor; a clean Windows VM was not tested.
 
-Local processing still creates local data according to your settings. Review history and retry-audio settings in the guide. Model weights, executables, personal settings, databases, recordings, and operational logs are excluded from this repository. Download third-party dependencies and models separately under their respective terms.
+Local processing still creates local data according to your settings. Review history and retry-audio settings in the guide. Git source excludes model weights, executables, personal settings, databases, recordings, and operational logs. The downloadable installer includes the pinned speech dependencies and models with their license notices.

@@ -1,7 +1,7 @@
 param(
     [string]$ReleaseDirectory='',
     [ValidateSet('Prepare','Activate','Rollback')][string]$Action='Prepare',
-    [string]$Version='0.2.0-terminal-insertion-20260916'
+    [string]$Version='0.2.0-bundled-20260919'
 )
 $ErrorActionPreference='Stop'
 if($Version -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'){throw 'Invalid version'}
@@ -61,7 +61,7 @@ foreach($name in $names){
 }
 $launch='start "Parla engine" /min "'+$installed+'" %*'
 $openDashboard='start "" "http://127.0.0.1:9393"'
-$pythonEnv='if exist "%LOCALAPPDATA%\Parla\venv\Scripts\python.exe" set "PYTHON=%LOCALAPPDATA%\Parla\venv\Scripts\python.exe"'
+$pythonEnv='if exist "%LOCALAPPDATA%\Parla\venv\Scripts\python.exe" set "PARLA_PARAKEET_PYTHON=%LOCALAPPDATA%\Parla\venv\Scripts\python.exe"'
 $normal=@('@echo off',$pythonEnv,$launch,$openDashboard)
 $turbo=@('@echo off',$pythonEnv,'set "PARLA_MODEL=%LOCALAPPDATA%\Parla\models\whisper\ggml-large-v3-turbo.bin"',$launch,$openDashboard)
 Set-Content -LiteralPath (Join-Path $base 'parla.bat') -Value $normal

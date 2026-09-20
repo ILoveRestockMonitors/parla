@@ -1,0 +1,39 @@
+[
+  {
+    "name": "ggml-small.bin",
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
+    "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"
+  },
+  {
+    "name": "parakeet-int8.tar.bz2",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2",
+    "sha256": "157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad"
+  },
+  {
+    "name": "python-3.12.10-embed-amd64.zip",
+    "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+    "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+    "hash_source": "Recorded from the official HTTPS distribution"
+  },
+  {
+    "name": "sherpa_onnx-1.13.7-cp312-cp312-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/46/3d/7b5cdf6a1c01080b6c579134fba082c4fc35b13bc6e35d85285ab8fc9380/sherpa_onnx-1.13.7-cp312-cp312-win_amd64.whl",
+    "sha256": "d6b8adb339e0e89cf9914de610c85d2d5e4715b09f566eaf796a92eb72c014d1"
+  },
+  {
+    "name": "sherpa_onnx_core-1.13.7-py3-none-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/20/87/2ac78c15d4b6bc8ba663b4fef8a9d01ef32a09c336b828d27af3e4962116/sherpa_onnx_core-1.13.7-py3-none-win_amd64.whl",
+    "sha256": "cbcb78ef8a3bb74acf0b9d0a8715e9b857491be8e2b1e8f589f09ecf3d2f2a0b"
+  },
+  {
+    "name": "numpy-2.4.6-cp312-cp312-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/ab/ca/feab00bd44aa5fe1ad2c18f08b4d3bb92e26484b0b1d1443897809ed528c/numpy-2.4.6-cp312-cp312-win_amd64.whl",
+    "sha256": "d8e8286dd7cea7895157318d1b91cdacac64c479f3cbc8dce548331728484751"
+  },
+  {
+    "name": "innosetup-6.6.1.exe",
+    "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_6_1/innosetup-6.6.1.exe",
+    "sha256": "d243ce440c02705530699554fb9612b9b2bd7a2a90629cdb7f41e66f5faeb91f",
+    "build_tool_only": true
+  }
+]

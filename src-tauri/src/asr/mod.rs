@@ -328,11 +328,23 @@ pub fn ensure_engine(settings: &Settings) -> Result<Box<dyn AsrEngine>, String> 
 /// (harness reaping) — this runs inside the engine process, parented to it,
 /// hidden window, same recipe class as whisper-server. Shim stdout/stderr go
 /// to a log file (NOT null) so cold-start failures are diagnosable.
+pub fn parakeet_python() -> String {
+    std::env::var("PARLA_PARAKEET_PYTHON").unwrap_or_else(|_| {
+        if let Some(bundle) = crate::bundle::installed() {
+            return bundle.python;
+        }
+        let installed = std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default())
+            .join("Programs/Python/Python312/python.exe");
+        if installed.is_file() {
+            installed.to_string_lossy().into_owned()
+        } else {
+            "python".into()
+        }
+    })
+}
+
 fn spawn_shim(client: &parakeet_local::ParakeetClient) -> Result<std::process::Child, String> {
-    let root = std::path::Path::new(&client.model_dir)
-        .parent()
-        .ok_or("parakeet dir has no parent")?
-        .to_path_buf();
+    let root = client.runtime_directory()?;
     let shim = root.join("shim.py");
     let log_path = root.join("shim.log");
     let log = std::fs::OpenOptions::new()
@@ -343,17 +355,9 @@ fn spawn_shim(client: &parakeet_local::ParakeetClient) -> Result<std::process::C
     let err_log = log
         .try_clone()
         .map_err(|e| format!("clone shim log handle: {e}"))?;
-    let python = std::env::var("PARLA_PARAKEET_PYTHON").unwrap_or_else(|_| {
-        let installed = std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default())
-            .join("Programs/Python/Python312/python.exe");
-        if installed.is_file() {
-            installed.to_string_lossy().into_owned()
-        } else {
-            "python".into()
-        }
-    });
-    let mut cmd = std::process::Command::new(python);
-    cmd.arg("-u")
+    let mut cmd = std::process::Command::new(parakeet_python());
+    cmd.arg("-B")
+        .arg("-u")
         .arg(&shim)
         .arg("--models")
         .arg(&client.model_dir)
