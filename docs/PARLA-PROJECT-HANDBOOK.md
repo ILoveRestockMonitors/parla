@@ -4,9 +4,9 @@
 
 For changes made after that baseline, the maintained [README](../README.md), [current state](current-state.md), and [changelog](../CHANGELOG.md) take precedence. Original Markdown files remain intact. The source index at the end identifies included, duplicate, historical, and unavailable material.
 
-## September 21 implementation addendum — verification in progress
+## September 21 implementation addendum and release status
 
-The `0.3.0-portable-20260921` source adds the work summarized below. Native builds, installed-package checks, final Windows installer verification, and publication evidence are still being completed. This addendum describes implemented source and bounded development evidence; it does **not** claim that the new packages have shipped or that interactive compatibility has been established on every platform. Sections 1–11 retain the explicitly dated earlier baseline.
+The `0.3.0-portable-20260921` source adds the work summarized below. Windows passed 140 Rust tests and its installed-bundle checks; each Mac architecture passed 114 tests and Linux passed 115, with native package installation and bundled speech replay verified in [run 35613094718](https://github.com/ILoveRestockMonitors/parla/actions/runs/35613094718). Consult [current state](current-state.md) for publication evidence. These are bounded package checks, not proof of live microphone, permission or editor compatibility on every platform. Sections 1–11 retain the explicitly dated earlier baseline.
 
 - **Architecture:** Parla keeps its shared Rust application core. OpenWhispr uses a JavaScript/TypeScript Electron shell with native speech engines/platform helpers; its separation of platform integration, model processes, and cleanup informed this work. Parla did not transplant the Electron shell or copy OpenWhispr source. See the pinned comparison reference and implementation detail in [current state](current-state.md).
 - **Wording-preserving stutter cleanup:** `Remove stutters` is **on by default and can be disabled**. A deterministic local stage removes explicit fragments such as `b-b-book`, repeated pronouns, and selected phrase restarts. Tested protections preserve grammatical repetition, emphasis, numbers, negation, quotes/code, and dictionary terms; ambiguous cases remain. Raw ASR and dictionary-normalized text stay available. This is transcript cleanup, not a guarantee that every spoken stutter is recognized or corrected.
@@ -33,7 +33,7 @@ For further speed work, first measure the interval from stopping speech to final
 
 ## Contents
 
-- [September 21 implementation addendum](#september-21-implementation-addendum--verification-in-progress)
+- [September 21 implementation addendum](#september-21-implementation-addendum-and-release-status)
 
 1. [Source, release, and installation identity](#1-source-release-and-installation-identity)
 2. [Product behavior and controls](#2-product-behavior-and-controls)
