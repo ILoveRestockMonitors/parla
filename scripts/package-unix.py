@@ -24,13 +24,20 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import unittest
 import urllib.parse
 import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.3.0-portable-20260921"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+PACKAGE_VERSION = tomllib.loads((ROOT / "src-tauri/Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
+RELEASE_DATE = VERSION.rsplit("-", 1)[-1]
+if not VERSION.startswith(PACKAGE_VERSION + "-") or not re.fullmatch(r"\d{8}", RELEASE_DATE):
+    raise RuntimeError("VERSION must match the Cargo package version and end in YYYYMMDD")
+_major, _minor, _patch = map(int, PACKAGE_VERSION.split("."))
+MAC_BUILD_VERSION = f"{_major * 10000 + _minor * 100 + _patch}{RELEASE_DATE}"
 PYTHON_RELEASE = "20260901"
 PYTHON_VERSION = "3.12.14"
 # Checked against the publisher's release/20260901/SHA256SUMS on 2026-09-21.
@@ -390,7 +397,7 @@ def package(args) -> None:
     write_notices(payload, cache, args.target)
     shutil.copy2(ROOT / "docs/unix-installation.md", payload / "INSTALL.md")
     if mac:
-        (root / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleName": "Parla", "CFBundleDisplayName": "Parla", "CFBundleIdentifier": "com.parla.dictation", "CFBundleExecutable": "parla", "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.3.0", "CFBundleVersion": "30020260921", "LSMinimumSystemVersion": "15.0", "NSMicrophoneUsageDescription": "Parla records speech only when you start dictation and transcribes it on your computer.", "NSHighResolutionCapable": True}))
+        (root / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleName": "Parla", "CFBundleDisplayName": "Parla", "CFBundleIdentifier": "com.parla.dictation", "CFBundleExecutable": "parla", "CFBundlePackageType": "APPL", "CFBundleShortVersionString": PACKAGE_VERSION, "CFBundleVersion": MAC_BUILD_VERSION, "LSMinimumSystemVersion": "15.0", "NSMicrophoneUsageDescription": "Parla records speech only when you start dictation and transcribes it on your computer.", "NSHighResolutionCapable": True}))
         sign_macho_files(root)
     else:
         launcher = root / "parla-launch"
@@ -408,7 +415,7 @@ def package(args) -> None:
         components = output / "components.plist"
         subprocess.run(["pkgbuild", "--analyze", "--root", str(package_root), str(components)], check=True)
         fix_component_locations(components)
-        subprocess.run(["pkgbuild", "--root", str(package_root), "--component-plist", str(components), "--install-location", "/Applications", "--identifier", "com.parla.dictation", "--version", "0.3.0", str(pkg)], check=True)
+        subprocess.run(["pkgbuild", "--root", str(package_root), "--component-plist", str(components), "--install-location", "/Applications", "--identifier", "com.parla.dictation", "--version", PACKAGE_VERSION, str(pkg)], check=True)
         subprocess.run(["pkgutil", "--expand", str(pkg), str(output / "pkg-expanded")], check=True)
         subprocess.run(["sudo", "installer", "-pkg", str(pkg), "-target", "/"], check=True)
         installed = Path("/Applications/Parla.app")
@@ -433,7 +440,7 @@ def package(args) -> None:
         control = debroot / "DEBIAN/control"
         control.parent.mkdir()
         size = sum(path.stat().st_size for path in root.rglob("*") if path.is_file()) // 1024
-        control.write_text(f"Package: parla\nVersion: 0.3.0+20260921\nArchitecture: amd64\nMaintainer: Parla maintainers <noreply@github.com>\nInstalled-Size: {size}\nDepends: libasound2, libx11-6, libxtst6, libxdo3, libxcb1, libxkbcommon0, libc6 (>= 2.35), libstdc++6\nDescription: Local speech dictation with bundled Parakeet\n Includes a private Python runtime and speech model.\n")
+        control.write_text(f"Package: parla\nVersion: {PACKAGE_VERSION}+{RELEASE_DATE}\nArchitecture: amd64\nMaintainer: Parla maintainers <noreply@github.com>\nInstalled-Size: {size}\nDepends: libasound2, libx11-6, libxtst6, libxdo3, libxcb1, libxkbcommon0, libc6 (>= 2.35), libstdc++6\nDescription: Local speech dictation with bundled Parakeet\n Includes a private Python runtime and speech model.\n")
         deb = dist / f"Parla-{VERSION}-linux-x64.deb"
         env = dict(os.environ, SOURCE_DATE_EPOCH=str(epoch))
         subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(debroot), str(deb)], env=env, check=True)
