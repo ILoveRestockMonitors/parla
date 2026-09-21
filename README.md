@@ -14,9 +14,19 @@ The installer includes **Parakeet, Whisper, both speech models, and a private Py
 
 [Release notes and checksums](https://github.com/ILoveRestockMonitors/parla/releases/latest) · [Third-party notices](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/THIRD-PARTY-NOTICES.txt)
 
+## Mac and Linux preview downloads
+
+| Platform | Package |
+| --- | --- |
+| macOS 15+ Apple Silicon | [PKG installer](https://github.com/ILoveRestockMonitors/parla/releases/download/v0.3.0-portable-20260921/Parla-0.3.0-portable-20260921-macos-arm64.pkg) |
+| macOS 15+ Intel | [PKG installer](https://github.com/ILoveRestockMonitors/parla/releases/download/v0.3.0-portable-20260921/Parla-0.3.0-portable-20260921-macos-x64.pkg) |
+| Linux x64, Ubuntu 22.04/glibc 2.35 baseline | [DEB](https://github.com/ILoveRestockMonitors/parla/releases/download/v0.3.0-portable-20260921/Parla-0.3.0-portable-20260921-linux-x64.deb) · [tar.gz](https://github.com/ILoveRestockMonitors/parla/releases/download/v0.3.0-portable-20260921/Parla-0.3.0-portable-20260921-linux-x64.tar.gz) |
+
+These packages include the English Parakeet model and private Python. Native builds, package installation and offline recognition were verified; live microphone, permission prompts, hotkeys and editor interactions remain unverified. Mac packages are not Developer ID signed or notarized. Read the [platform instructions and limitations](docs/unix-installation.md) before using these previews. [Release evidence and checksums](https://github.com/ILoveRestockMonitors/parla/releases/tag/v0.3.0-portable-20260921) accompany the downloads.
+
 ## Start here
 
-**Development release: `0.3.0-portable-20260921`; source updated September 21, 2026.** Read [Current state](docs/current-state.md) for implementation, test results, package publication status, and remaining gaps. [Changes](CHANGELOG.md) records release behavior. Build this repository directly; old embedded source snapshots are historical.
+**Release: `0.3.0-portable-20260921`; published September 21, 2026.** Read [Current state](docs/current-state.md) for implementation, test results, package publication status, and remaining gaps. [Changes](CHANGELOG.md) records release behavior. Build this repository directly; old embedded source snapshots are historical.
 
 **[Complete shareable build guide](PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md)** — detailed prerequisites, exact commands, architecture, implementation contracts, troubleshooting, tests, installation, and rollback. The guide also contains a checksummed source snapshot and a Python extractor, so the single Markdown file can be shared independently of this repository.
 
