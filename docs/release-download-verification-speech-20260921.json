@@ -1,0 +1,170 @@
+{
+  "release_id": 393310094,
+  "tag": "v0.3.1-speech-cleanup-20260921",
+  "url": "https://github.com/ILoveRestockMonitors/parla/releases/tag/v0.3.1-speech-cleanup-20260921",
+  "latest": true,
+  "asset_count": 23,
+  "assets": [
+    {
+      "name": "bundle-manifest.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "manifest-linux-x64.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "manifest-macos-arm64.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "manifest-macos-x64.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "native-assets.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "Parla-0.3.1-speech-cleanup-20260921-linux-x64.deb",
+      "anonymous_get_status": 206,
+      "server_sha256_matched": true,
+      "public_read": "header range",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "Parla-0.3.1-speech-cleanup-20260921-linux-x64.tar.gz",
+      "anonymous_get_status": 206,
+      "server_sha256_matched": true,
+      "public_read": "header range",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "Parla-0.3.1-speech-cleanup-20260921-macos-arm64.pkg",
+      "anonymous_get_status": 206,
+      "server_sha256_matched": true,
+      "public_read": "header range",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "Parla-0.3.1-speech-cleanup-20260921-macos-x64.pkg",
+      "anonymous_get_status": 206,
+      "server_sha256_matched": true,
+      "public_read": "header range",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "Parla-Setup.exe",
+      "anonymous_get_status": 206,
+      "server_sha256_matched": true,
+      "public_read": "header range",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "parla.exe",
+      "anonymous_get_status": 206,
+      "server_sha256_matched": true,
+      "public_read": "header range",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "release-record.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "SHA256SUMS-native.txt",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "speech-model-verification.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "THIRD-PARTY-NOTICES-linux-x64.txt",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "THIRD-PARTY-NOTICES-macos-arm64.txt",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "THIRD-PARTY-NOTICES-macos-x64.txt",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "THIRD-PARTY-NOTICES.txt",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "verification-linux-x64.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "verification-macos-arm64.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "verification-macos-x64.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    },
+    {
+      "name": "verification-windows-x64.json",
+      "anonymous_get_status": 200,
+      "server_sha256_matched": true,
+      "public_read": "complete file",
+      "download_query": "download=1 (cache refreshed on gateway errors)"
+    }
+  ]
+}

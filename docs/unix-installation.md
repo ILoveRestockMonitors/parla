@@ -1,6 +1,6 @@
 # Parla on macOS and Linux
 
-The portable packaging target is `0.3.0-portable-20260921`. Download only artifacts
+The portable packaging target is `0.3.1-speech-cleanup-20260921`. Download only artifacts
 attached to a published Parla release and compare their SHA-256 checksum with that
 release's checksum file. A workflow definition or successful compile is not an
 installer release. The release's verification files identify which native builds
@@ -60,7 +60,7 @@ For Debian/Ubuntu, install the downloaded package with the distribution's packag
 manager so dependencies are resolved:
 
 ```sh
-sudo apt install ./Parla-0.3.0-portable-20260921-linux-x64.deb
+sudo apt install ./Parla-0.3.1-speech-cleanup-20260921-linux-x64.deb
 parla --check-setup
 parla --dashboard
 ```

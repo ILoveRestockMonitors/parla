@@ -13,7 +13,7 @@ The Windows x64 installer includes Parla, Parakeet and Whisper, both speech mode
 
 The installer places about 1.3 GB of files under `%LOCALAPPDATA%\Programs\Parla`. Recognition runs on the CPU. Speed and accuracy depend on your computer and speech. Whisper is also included and can be selected from the dashboard.
 
-Version `0.3.0-portable-20260921` adds **Remove stutters**, enabled by default. It conservatively removes explicit repeated fragments and selected repetitions while keeping your wording. Turn it off in Settings if preferred. Raw and dictionary-normalized text remain available for recovery; ambiguous repetitions are preserved.
+Version `0.3.1-speech-cleanup-20260921` includes **Clean speech**, enabled by default. It removes clear vocal fillers, explicit repeated fragments and bounded spoken corrections. Polished mode adds cleanup of abandoned attempts and local-model punctuation and small grammar repairs. Choose **Polished** in the cleanup dropdown and check **Active: Polished**; mode changes apply immediately. Other settings use **Save settings**. Turn Clean speech off to retain recognized words. Raw and dictionary-normalized text remain available for recovery; ambiguous speech may be preserved.
 
 The app and installer are unsigned, so Windows may show an unknown-publisher prompt. Use the linked GitHub release; its `SHA256SUMS.txt` records download checksums. Do not disable Windows security protections.
 
