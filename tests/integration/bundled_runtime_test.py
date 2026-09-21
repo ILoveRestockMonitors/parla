@@ -70,7 +70,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="parla-bundled-runtime-") as tmp:
         env = dict(os.environ, LOCALAPPDATA=tmp, APPDATA=tmp,
                    PATH=str(Path(os.environ["SystemRoot"]) / "System32"))
-        for name in ("PYTHONHOME", "PYTHONPATH", "PYTHON", "PARLA_PARAKEET_PYTHON", "PARLA_MODEL", "PARLA_PARAKEET_GPU"):
+        for name in ("PYTHONHOME", "PYTHONPATH", "PYTHON", "PARLA_PARAKEET_PYTHON", "PARLA_MODEL", "PARLA_PARAKEET_GPU", "PARLA_DATA_DIR"):
             env.pop(name, None)
         def run(*command):
             return subprocess.run(command, env=env, capture_output=True, text=True,
@@ -80,6 +80,10 @@ def main():
         settings = json.loads(settings_path.read_text())
         assert settings["asr_backend"] == "parakeet"
         assert settings["cleanup_mode"] == "faithful"
+        assert settings["stutter_correction"] is True
+        manifest = json.loads((bundle / "bundle-manifest.json").read_text(encoding="utf-8"))
+        version = run(str(binary), "--version").stdout.strip()
+        assert manifest["version"] in version and manifest["source_commit"] in version, version
         assert Path(settings["asr_model_path"]) == bundle / "models/whisper/ggml-small.bin"
         before = settings_path.read_bytes()
         run(str(binary), "--initialize-bundle")
@@ -97,6 +101,7 @@ def main():
         whisper = engine_test([str(bundle / "engines/whisper/whisper-server.exe"), "--host", "127.0.0.1",
             "-m", str(bundle / "models/whisper/ggml-small.bin"), "-l", "en", "-t", "4"], fixture, env, whisper=True)
         print(json.dumps({"settings_initialization":"passed","existing_settings_preserved":True,
+            "stutter_correction_default":True,"version":version,
             "private_python_and_packages":"passed","system_path_only":True,"microphone_or_typing_used":False,
             "parakeet_transcript":parakeet,"whisper_transcript":whisper}, indent=2))
 

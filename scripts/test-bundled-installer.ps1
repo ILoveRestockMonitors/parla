@@ -11,16 +11,18 @@ $app=Join-Path $testRoot 'Parla App'
 $data=Join-Path $testRoot 'User Data'
 New-Item -ItemType Directory -Path $data -Force | Out-Null
 $oldLocal=$env:LOCALAPPDATA
+$oldData=$env:PARLA_DATA_DIR
 $record=[ordered]@{test_root=$testRoot;installer=$installerPath}
 try {
     $env:LOCALAPPDATA=$data
+    $env:PARLA_DATA_DIR=Join-Path $data 'Parla'
     $arguments=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/NOICONS','/TASKS=""',('/DIR="'+$app+'"'),('/LOG="'+(Join-Path $testRoot 'install.log')+'"'))
     $process=Start-Process -FilePath $installerPath -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait
     if($process.ExitCode -ne 0){throw "Install failed: $($process.ExitCode)"}
     $settings=Join-Path $data 'Parla/settings.json'
     if(!(Test-Path -LiteralPath $settings)){throw 'Fresh settings did not land in isolated user data'}
     $value=Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json
-    if($value.asr_backend -ne 'parakeet' -or $value.cleanup_mode -ne 'faithful'){throw 'Incorrect first-run defaults'}
+    if($value.asr_backend -ne 'parakeet' -or $value.cleanup_mode -ne 'faithful' -or $value.stutter_correction -ne $true){throw 'Incorrect first-run defaults'}
     if([IO.Path]::GetFullPath($value.asr_server_exe) -ne [IO.Path]::GetFullPath((Join-Path $app 'engines/whisper/whisper-server.exe'))){throw 'Installed paths were not initialized'}
     $manifest=Get-Content -LiteralPath (Join-Path $app 'bundle-manifest.json') -Raw | ConvertFrom-Json
     foreach($file in $manifest.files){
@@ -44,4 +46,4 @@ try {
     $record.install_and_uninstall='passed'
     $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root 'release/bundled-installer-test.json') -Encoding utf8
     $record | ConvertTo-Json -Depth 8
-} finally { $env:LOCALAPPDATA=$oldLocal }
+} finally { $env:LOCALAPPDATA=$oldLocal; $env:PARLA_DATA_DIR=$oldData }

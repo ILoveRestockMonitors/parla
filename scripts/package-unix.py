@@ -284,12 +284,17 @@ def run_isolated(command: list[str], env: dict, cwd: Path, timeout: int = 180) -
 
 def verify_runtime(root: Path, payload: Path, binary: Path, fixture: Path) -> dict:
     count = verify_manifest(root, payload)
+    bundle = json.loads((payload / "bundle-manifest.json").read_text())
     with tempfile.TemporaryDirectory(prefix="parla-package-test-") as temporary:
         state = Path(temporary)
         env = dict(os.environ)
         for name in ("PYTHONHOME", "PYTHONPATH", "PARLA_MODEL", "PARLA_PARAKEET_PYTHON"):
             env.pop(name, None)
         env.update({"HOME": str(state), "XDG_DATA_HOME": str(state / "data"), "XDG_CONFIG_HOME": str(state / "config"), "LOCALAPPDATA": str(state / "local"), "PARLA_DATA_DIR": str(state / "parla"), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"})
+        binary_version = run_isolated([str(binary), "--version"], env, state).strip()
+        expected_version = f"Parla {bundle['version']} ({bundle['source_commit']})"
+        if binary_version != expected_version:
+            raise RuntimeError(f"Binary/source manifest mismatch: {binary_version!r} != {expected_version!r}")
         python = payload / "runtime/python/bin/python3"
         versions = run_isolated([str(python), "-B", "-c", "import json,sys,numpy,sherpa_onnx; print(json.dumps({'python':sys.version,'numpy':numpy.__version__,'sherpa':sherpa_onnx.__version__}))"], env, state)
         run_isolated([str(binary), "--initialize-bundle"], env, state)
@@ -301,10 +306,16 @@ def verify_runtime(root: Path, payload: Path, binary: Path, fixture: Path) -> di
         data = json.loads(content)
         if data["asr_backend"] != "parakeet" or Path(data["parakeet_model_dir"]).resolve() != (payload / "models/parakeet").resolve():
             raise RuntimeError("Fresh settings did not select the bundled Parakeet model")
+        if data.get("stutter_correction") is not True:
+            raise RuntimeError("Fresh settings did not enable the documented stutter correction default")
         run_isolated([str(binary), "--initialize-bundle"], env, state)
         if settings.read_bytes() != content:
             raise RuntimeError("Repeated initialization overwrote existing settings")
-        setup = run_isolated([str(binary), "--check-setup"], env, state)
+        setup = json.loads(run_isolated([str(binary), "--check-setup"], env, state))
+        states = {item["id"]: item["state"] for item in setup.get("items", [])}
+        required = {"python": "found", "sherpa": "ready", "parakeet-model": "found"}
+        if setup.get("engine") != "parakeet" or any(states.get(key) != value for key, value in required.items()):
+            raise RuntimeError(f"Installed setup diagnostics do not recognize the bundle: {setup}")
         prompt = json.loads(run_isolated([str(binary), "--export-prompt"], env, state))
         if not prompt.get("system"):
             raise RuntimeError("Prompt export missing system prompt")
@@ -312,7 +323,20 @@ def verify_runtime(root: Path, payload: Path, binary: Path, fixture: Path) -> di
         text = replay.lower().replace("’", "'")
         if "don't wish to see" not in text or "old portrait" not in text:
             raise RuntimeError(f"Public audio fixture transcript did not match expected phrases:\n{replay}")
-    return {"verified_files": count, "runtime_versions": json.loads(versions), "settings_preserved": True, "setup": setup, "public_fixture_sha256": sha(fixture), "public_fixture_source": "Pinned k2-fsa Parakeet model archive, test_wavs/0.wav", "replay": replay, "microphone_used": False, "input_injection_used": False, "live_hotkey_permissions_tested": False}
+    return {"verified_files": count, "binary_version": binary_version, "stutter_correction_default": True, "runtime_versions": json.loads(versions), "settings_preserved": True, "setup": setup, "public_fixture_sha256": sha(fixture), "public_fixture_source": "Pinned k2-fsa Parakeet model archive, test_wavs/0.wav", "replay": replay, "microphone_used": False, "input_injection_used": False, "live_hotkey_permissions_tested": False}
+
+
+def fix_component_locations(path: Path) -> None:
+    components = plistlib.loads(path.read_bytes())
+    if not isinstance(components, list) or not any(item.get("RootRelativeBundlePath") == "Parla.app" for item in components):
+        raise RuntimeError("pkgbuild analysis did not identify the Parla application")
+    for component in components:
+        # Without this, Installer can find the existing staged .app and silently
+        # upgrade it there instead of creating /Applications/Parla.app.
+        component["BundleIsRelocatable"] = False
+        component["BundleHasStrictIdentifier"] = True
+        component["BundleOverwriteAction"] = "upgrade"
+    path.write_bytes(plistlib.dumps(components))
 
 
 def tar_output(source: Path, target: Path, epoch: int) -> None:
@@ -368,10 +392,23 @@ def package(args) -> None:
     epoch = int(subprocess.check_output(["git", "show", "-s", "--format=%ct", "HEAD"], cwd=ROOT))
     if mac:
         pkg = dist / f"Parla-{VERSION}-{args.target}.pkg"
-        subprocess.run(["pkgbuild", "--component", str(root), "--install-location", "/Applications", "--identifier", "com.parla.dictation", "--version", "0.3.0", str(pkg)], check=True)
+        package_root = output / "pkg-root"
+        shutil.copytree(root, package_root / "Parla.app", symlinks=True)
+        components = output / "components.plist"
+        subprocess.run(["pkgbuild", "--analyze", "--root", str(package_root), str(components)], check=True)
+        fix_component_locations(components)
+        subprocess.run(["pkgbuild", "--root", str(package_root), "--component-plist", str(components), "--install-location", "/Applications", "--identifier", "com.parla.dictation", "--version", "0.3.0", str(pkg)], check=True)
         subprocess.run(["pkgutil", "--expand", str(pkg), str(output / "pkg-expanded")], check=True)
         subprocess.run(["sudo", "installer", "-pkg", str(pkg), "-target", "/"], check=True)
         installed = Path("/Applications/Parla.app")
+        receipt = plistlib.loads(subprocess.check_output(["pkgutil", "--pkg-info-plist", "com.parla.dictation"]))
+        receipt_files = subprocess.check_output(["pkgutil", "--files", "com.parla.dictation"], text=True).splitlines()
+        manifest_name = "Parla.app/Contents/Resources/bundle-manifest.json"
+        if receipt.get("install-location", "").rstrip("/") != "/Applications" or manifest_name not in receipt_files:
+            raise RuntimeError(f"Installed receipt does not target /Applications/Parla.app: {receipt}")
+        if not (installed / "Contents/Resources/bundle-manifest.json").is_file():
+            raise RuntimeError("Installer did not create /Applications/Parla.app despite its receipt")
+        verification["macos_receipt"] = receipt
         verification["installed"] = verify_runtime(installed, installed / "Contents/Resources", installed / "Contents/MacOS/parla", fixture)
     else:
         tar_output(root, dist / f"Parla-{VERSION}-linux-x64.tar.gz", epoch)
@@ -406,6 +443,17 @@ def package(args) -> None:
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_macos_component_cannot_relocate_to_staging_app(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "components.plist"
+            path.write_bytes(plistlib.dumps([{"RootRelativeBundlePath": "Parla.app", "BundleIsRelocatable": True, "BundleIsVersionChecked": True}]))
+            fix_component_locations(path)
+            data = plistlib.loads(path.read_bytes())[0]
+            self.assertIs(data["BundleIsRelocatable"], False)
+            self.assertEqual(data["RootRelativeBundlePath"], "Parla.app")
+            self.assertTrue(data["BundleIsVersionChecked"])
+            self.assertEqual(data["BundleOverwriteAction"], "upgrade")
+
     def test_tar_rejects_traversal_and_external_links(self):
         for name, link in [("../escape", None), ("/absolute", None), ("link", "../../escape"), ("link", "/etc/passwd")]:
             with self.subTest(name=name, link=link), tempfile.TemporaryDirectory() as temporary:

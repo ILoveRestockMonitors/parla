@@ -65,7 +65,7 @@ The initial audience should be people who dictate long prompts or everyday writi
 | Message | Why it could matter | Evidence required before publication |
 | --- | --- | --- |
 | “Dictate in your own words.” | A clear alternative to aggressive rewriting. | Demonstrations and tests of Faithful behavior; explain that recognition itself can make errors. |
-| “Optional cleanup for repeated speech.” | Makes the new correction feature discoverable without portraying a speech difference as something to cure. | Opt-in control, before/after examples, protected names/numbers/negations, preservation of intentional repetition, and a recovery path. |
+| “Configurable cleanup for repeated speech.” | Makes the new correction feature discoverable without portraying a speech difference as something to cure. | Visible control with its default disclosed (on by default; can be disabled), before/after examples, protected names/numbers/negations, preservation of intentional repetition, and a recovery path. |
 | “Local dictation, with your models included.” | Makes setup concrete. | Exact release manifest; distinguish a bundled installer from packages that download models separately. |
 | “Text appears in [measured interval] after you stop.” | Addresses the actual waiting period. | End-to-end benchmark including finalization and insertion, disclosed hardware/model/clip duration and cold versus warm runs. |
 | “Windows, macOS and Linux.” | Makes the product usable across a person's machines. | Published, installed and tested artifacts for the specific architectures and desktop environments listed. Compiling a core library is insufficient. |
@@ -157,7 +157,7 @@ These are draft assets for the website and channels that permit assisted draftin
 
 **Optional feature announcement, only after validation**
 
-> We added optional cleanup for repeated speech in Parla. This recording shows what I said, what the recognizer heard, and exactly what cleanup changed. You can turn it off. We are testing cases where repetition is intentional, because removing the wrong word can change the meaning. [Build and demo]
+> We added configurable cleanup for repeated speech in Parla. It is on by default and you can turn it off. This recording shows what I said, what the recognizer heard, and exactly what cleanup changed. We are testing cases where repetition is intentional, because removing the wrong word can change the meaning. [Build and demo]
 
 **Developer demonstration caption**
 

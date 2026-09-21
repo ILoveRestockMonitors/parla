@@ -4,7 +4,36 @@
 
 For changes made after that baseline, the maintained [README](../README.md), [current state](current-state.md), and [changelog](../CHANGELOG.md) take precedence. Original Markdown files remain intact. The source index at the end identifies included, duplicate, historical, and unavailable material.
 
+## September 21 implementation addendum — verification in progress
+
+The `0.3.0-portable-20260921` source adds the work summarized below. Native builds, installed-package checks, final Windows installer verification, and publication evidence are still being completed. This addendum describes implemented source and bounded development evidence; it does **not** claim that the new packages have shipped or that interactive compatibility has been established on every platform. Sections 1–11 retain the explicitly dated earlier baseline.
+
+- **Architecture:** Parla keeps its shared Rust application core. OpenWhispr uses a JavaScript/TypeScript Electron shell with native speech engines/platform helpers; its separation of platform integration, model processes, and cleanup informed this work. Parla did not transplant the Electron shell or copy OpenWhispr source. See the pinned comparison reference and implementation detail in [current state](current-state.md).
+- **Wording-preserving stutter cleanup:** `Remove stutters` is **on by default and can be disabled**. A deterministic local stage removes explicit fragments such as `b-b-book`, repeated pronouns, and selected phrase restarts. Tested protections preserve grammatical repetition, emphasis, numbers, negation, quotes/code, and dictionary terms; ambiguous cases remain. Raw ASR and dictionary-normalized text stay available. This is transcript cleanup, not a guarantee that every spoken stutter is recognized or corrected.
+- **Performance:** Warm owned speech processes avoid repeated setup/readiness work; the resampler reuses computation, and short recordings reuse cleared buffers without keeping the microphone running while idle. Reported resampling and allocation measurements concern individual components. They are **not whole-app speed multipliers** or end-to-end dictation benchmarks. The existing four-thread Parakeet default was retained after a small machine-specific difference failed to justify changing it globally.
+- **Platform scope:** Windows retains its native insertion/HUD path. The macOS adapter uses accessibility target checks and guarded paste; X11 uses focused-window identity and an input-change monitor. Unix insertion is single-line, sends no Return, uses the dashboard for status, and offers manual recovery rather than verified Restore. Native microphone, permissions, hotkey and editor interactions still require platform-specific live verification.
+- **Wayland fallback:** Use dashboard Start/stop or bind `parla toggle` through desktop shortcut settings, then Copy final and paste manually. Native Wayland global shortcuts and automatic insertion are not implemented. Explicit dashboard/CLI recording does not automatically paste into the dashboard or invoking terminal.
+
+Use [current verification and limitations](current-state.md) for the latest evidence, [Unix installation and build instructions](unix-installation.md) for package targets and permission requirements, and the separate [public launch plan](PARLA-PUBLIC-LAUNCH-PLAN.md) for the staged marketing strategy. Marketing claims remain gated on the actual release evidence. The original documents and their historical source/hash provenance below remain unchanged.
+
+### OpenWhispr comparison and the language decision
+
+This comparison uses [OpenWhispr revision a77fdce](https://github.com/OpenWhispr/openwhispr/tree/a77fdce34dbc0932cc3eee90646017df9be1c876), inspected September 21. Features in its source do not establish a measured speed advantage on the same hardware.
+
+| Layer | OpenWhispr | Parla and the useful decision |
+| --- | --- | --- |
+| Application | JavaScript/TypeScript and Electron, with Vite and platform helper builds in [package.json](https://github.com/OpenWhispr/openwhispr/blob/a77fdce34dbc0932cc3eee90646017df9be1c876/package.json). | Native Rust executable and embedded local HTML dashboard. Keep Rust: moving the shell to JavaScript would not inherently accelerate recognition. |
+| Recognition | Native whisper.cpp and sherpa-onnx dependencies behind application services. | Native sherpa-onnx inference through a small Python HTTP adapter; native whisper.cpp is the Windows alternative. Python is not executing the model's expensive numeric operations as ordinary Python loops. |
+| Model lifecycle | Its [Whisper server manager](https://github.com/OpenWhispr/openwhispr/blob/a77fdce34dbc0932cc3eee90646017df9be1c876/src/helpers/whisperServer.js) supervises processes, readiness, model configuration and CPU/GPU fallback. | Parla already retained model processes. This release avoids redundant setup/readiness work for its own unchanged, running child. Replacing the Python adapter is a possible packaging improvement, not an established recognition speedup. |
+| Acceleration | The inspected manager selects CPU, CUDA and Vulkan binaries and resolves thread settings. | Current offline packages are CPU builds. A separately benchmarked native GPU backend is a more plausible route to substantial model speedups than a shell-language rewrite; availability, installation size, accuracy and fallback must be tested. It is not implemented in this release. |
+| Cleanup | Its [general cleanup prompt](https://github.com/OpenWhispr/openwhispr/blob/a77fdce34dbc0932cc3eee90646017df9be1c876/src/locales/en/prompts.json) includes grammar editing, filler removal and false starts. | User-requested conservative repetition cleanup is deterministic and has no additional language-model request. Broader optional Polished mode remains separate. |
+| OS integration | Electron is supplemented by native keyboard, paste and other platform helpers; the shell alone does not solve OS behavior. | Platform adapters isolate native hotkeys, focus, insertion and data paths while keeping the Rust pipeline shared. Wayland and interactive platform verification remain explicit limitations. |
+
+For further speed work, first measure the interval from stopping speech to final text across short/long clips and cold/warm models. The component evidence here saves milliseconds in preparation; the public fixture's roughly 456 ms warm CPU recognition is much larger. Compare alternate models or hardware acceleration against the same clips and accuracy criteria, then consider incremental recognition if stop-to-text latency remains the main problem. Those are subsequent experiments, not claims that this release implements streaming or GPU inference.
+
 ## Contents
+
+- [September 21 implementation addendum](#september-21-implementation-addendum--verification-in-progress)
 
 1. [Source, release, and installation identity](#1-source-release-and-installation-identity)
 2. [Product behavior and controls](#2-product-behavior-and-controls)

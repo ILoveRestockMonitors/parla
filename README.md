@@ -24,9 +24,9 @@ If you clone this repository, skip the guide's extraction step and build the rep
 
 ## Features
 
-Automatic insertion uses Unicode typing. Before an ordinary insertion attempt, Parla also makes a best-effort clipboard copy; a busy clipboard does not block typing. The HUD shows recording/processing and disappears when idle. A failed accessibility check can use the same native field when the input monitor confirms no intervening typing or clicks; verified restore operations still require exact text checks.
+On Windows, automatic insertion uses Unicode typing. Before an ordinary insertion attempt, Parla also makes a best-effort clipboard copy; a busy clipboard does not block typing. The Windows HUD shows recording/processing and disappears when idle. A failed Windows accessibility check can use the same native field when the input monitor confirms no intervening typing or clicks; verified restore operations still require exact text checks. macOS and X11 use guarded clipboard paste and manual recovery; Wayland uses manual paste.
 
-- Local recognition through bundled Parakeet, with bundled whisper.cpp available as an alternative.
+- Local recognition through bundled Parakeet, with bundled whisper.cpp available as an alternative in the Windows installer.
 - **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections and the automatic numeric/list behavior described below.
 - **Remove stutters** (on by default) removes explicit fragments such as `b-b-book`, repeated pronouns such as `I I need`, and selected adjacent phrase restarts such as `I want I want to leave`. It leaves ambiguous emphasis, grammatical repetition, numbers, negation, quoted text, and protected dictionary terms alone. This is conservative transcript cleanup, not a guarantee that every spoken stutter is recognized or corrected. Raw and dictionary-normalized text remain available for recovery.
 - Clear lists automatically become separate bullet lines in writing apps such as Codex, in both cleanup modes. Say "I need eggs, milk, bread, and cheese pizza" or "First, call Alex. Second, review the quote." Introductions stay above the list; multiword items stay together. Natural pauses help recognition add item separators. Unclear boundaries stay as spoken text, and code editors keep ordinary dictation.
@@ -35,7 +35,7 @@ Automatic insertion uses Unicode typing. Before an ordinary insertion attempt, P
 - Number-only dictation is automatic in both cleanup modes: "one five four" becomes `154`; "sixty seven two four zero nine eight" becomes `6724098`; "sixty-nine thousand four hundred twenty" becomes `69420`. Natural number phrases are combined before joining adjacent chunks. Leading zeros and existing numeric groups are preserved. Ordinary sentences stay on the normal cleanup path. Digit entries have no trailing space; signs, decimals and ambiguous homophones are left alone.
 - Optional **Polished** cleanup uses a local Ollama model, with validation and fallback when the proposed edit changes protected content.
 - **Learn correction** saves an explicit spelling replacement; it does not retrain the recognition model.
-- **Restore original** attempts to replace the most recent unchanged insertion with raw recognition text after you return to the original field. The dashboard explains the time limit and recovery conditions.
+- On Windows, **Restore original** attempts to replace the most recent unchanged insertion with raw recognition text after you return to the original field. The dashboard explains the time limit and recovery conditions. Unix uses Copy raw and manual recovery.
 - Optional short-lived retry audio, bounded recording sessions, soft chimes, history controls, and a rounded native HUD that fades above the active monitor's taskbar without taking focus.
 
 ## Build overview
@@ -76,6 +76,6 @@ This first-run script refuses to overwrite existing settings. Follow the guide's
 
 ## Verification and limitations
 
-The current source passed **129 Rust tests (0 failed, 4 opt-in live tests ignored)**, an optimized Windows GNU build, and three CLI smoke checks on September 19, 2026. Both packaged speech engines transcribed a public test recording with system Python and developer tools excluded from their search path. The installer was checked in an isolated directory on the development PC, including installed-file hashes and preservation of personal settings during uninstall. See [Current state](docs/current-state.md) for scope and earlier live application checks. These results do not establish compatibility with every PC or editor; a clean Windows VM was not tested.
+The September 21 Windows build passed **140 Rust tests (0 failed, 4 opt-in live tests ignored)** and an optimized GNU build. The new installer passed an isolated installation, hashes for 1,015 payload files, fresh/default settings and source-version checks, recognition by both bundled engines, and uninstall preserving settings. The controlled Python HTTP suite passed five tests. Native Unix build and installed-package evidence is recorded in [Current state](docs/current-state.md) and the release's verification files. These results do not establish compatibility with every PC or editor; a clean Windows VM and live Mac/Linux microphone/editor sessions were not tested.
 
 Local processing still creates local data according to your settings. Review history and retry-audio settings in the guide. Git source excludes model weights, executables, personal settings, databases, recordings, and operational logs. The downloadable installer includes the pinned speech dependencies and models with their license notices.

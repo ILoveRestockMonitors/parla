@@ -88,11 +88,15 @@ preserved. For the archive, remove only the directory you extracted.
 ## Verification scope
 
 The packaging workflow runs Rust tests, constructs real native packages, installs
-them on the runner, verifies the payload hashes, imports the packaged Python
+them on the runner, verifies the payload hashes and embedded version/source,
+imports the packaged Python
 dependencies, initializes isolated settings, verifies that initialization preserves
-existing settings, exports the formatter prompt, and replays the public speech
+existing settings and the default-on stutter setting, asserts ready setup
+diagnostics, exports the formatter prompt, and replays the public speech
 fixture from the pinned model archive through the installed executable. Linux
-also tests a freshly extracted, relocated tarball.
+also tests a freshly extracted, relocated tarball. macOS packaging disables bundle
+relocation and verifies that the installation receipt and actual files target
+`/Applications/Parla.app` before testing the installed runtime.
 
 The replay checks two expected transcript phrases and records its actual output.
 It does not record a microphone, inject keyboard input, or test interactive
@@ -111,6 +115,7 @@ GitHub release. Pull requests run the tests/build without large model packaging.
 On the equivalent native build host, using Rust 1.98.0 and Python 3.12 or newer:
 
 ```sh
+export PARLA_BUILD_REVISION="$(git rev-parse HEAD)"
 cargo test --locked --workspace
 cargo build --locked --release --workspace
 python3 scripts/package-unix.py --self-test

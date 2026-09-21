@@ -18,7 +18,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-release.
 & $python .\scripts\finalize-bundle.py
 
 $payload = (Resolve-Path .\release\bundle-payload).Path
-$output = Join-Path (Get-Location).Path 'release\0.2.0-bundled-20260919\installer'
+$version = (Get-Content .\VERSION -Raw).Trim()
+$output = Join-Path (Get-Location).Path "release\$version\installer"
 & $iscc ('/DPayloadDir=' + $payload) ('/DOutputDir=' + $output) .\scripts\parla-installer.iss
 ```
 
@@ -26,14 +27,14 @@ Whisper is built from verified revision `48f628a84833905ee4a0658ee6d4a5c915ce199
 
 `bundle-sources.json` pins the speech models, Python distribution, wheels, and installer build tool by SHA-256. Preparation downloads and verifies these files, creates the private interpreter and model directories, and refuses to overwrite an existing payload. The Inno download is a build tool; it is not installed on end users' PCs. Preserve prior payloads before a fresh assembly.
 
-Finalization copies the tested application, installs attribution and license notices, and creates `bundle-manifest.json` with hashes for installed files. Run it after changing the app or welcome text and before compiling the installer. The current Rust notice bundle is pinned to the earlier release with the same Cargo.lock; regenerate notices if dependencies change. Python bytecode caches are excluded from the installer.
+Finalization copies the tested application, checks its build-record hash, installs attribution and license notices, and creates `bundle-manifest.json` with hashes for installed files. Run it after changing the app or welcome text and before compiling the installer. Rust dependency notices are collected from the current locked Cargo sources; the pinned earlier Windows notices preserve native runtime license and exception texts. The manifest records the executable's actual source commit separately from the packaging commit. Python bytecode caches are excluded from the installer.
 
 ## Verify before publishing
 
 ```powershell
 & $python .\tests\integration\bundled_runtime_test.py .\release\bundle-payload .\release\bundle-fixtures\0.wav
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-bundled-installer.ps1 -Installer .\release\0.2.0-bundled-20260919\installer\Parla-Setup.exe -Python $python -Fixture .\release\bundle-fixtures\0.wav
-Get-FileHash .\release\0.2.0-bundled-20260919\installer\Parla-Setup.exe -Algorithm SHA256
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-bundled-installer.ps1 -Installer "$output\Parla-Setup.exe" -Python $python -Fixture .\release\bundle-fixtures\0.wav
+Get-FileHash "$output\Parla-Setup.exe" -Algorithm SHA256
 ```
 
 The installer test refuses an already registered Parla installation. Use a separate test account when necessary. It installs silently into a unique temporary directory, with isolated user data and no shortcuts or automatic launch. It checks first-run settings, every manifest hash, both recognizers, uninstallation, and retained personal settings. On failure, inspect the printed test directory; use only that test installation's uninstaller before retrying. These checks do not replace clean Windows VM and manual microphone/shortcut testing.

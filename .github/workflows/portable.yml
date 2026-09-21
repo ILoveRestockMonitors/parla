@@ -7,6 +7,8 @@ on:
     paths:
       - 'src-tauri/**'
       - 'Cargo.*'
+      - 'VERSION'
+      - 'VERSION'
       - 'scripts/package-unix.py'
       - 'scripts/bundle-sources.json'
       - 'docs/unix-installation.md'
@@ -15,6 +17,8 @@ on:
     paths:
       - 'src-tauri/**'
       - 'Cargo.*'
+      - 'VERSION'
+      - 'VERSION'
       - 'scripts/package-unix.py'
       - 'scripts/bundle-sources.json'
       - '.github/workflows/portable.yml'

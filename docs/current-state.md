@@ -16,7 +16,9 @@ The shared application remains Rust. OpenWhispr's architecture informed the sepa
 - Data paths are `%LOCALAPPDATA%/Parla`, `~/Library/Application Support/Parla`, and `${XDG_DATA_HOME:-~/.local/share}/parla`; `PARLA_DATA_DIR` provides an explicit override for isolated tests. Bundled model/runtime files are separate from writable state. Builds include source-revision metadata.
 - [Project handbook](PARLA-PROJECT-HANDBOOK.md) consolidates 32 inventoried Markdown files and their history. [Public launch plan](PARLA-PUBLIC-LAUNCH-PLAN.md) contains source-linked marketing research and a staged 90-day plan. Original documents remain intact.
 
-Windows tests and the controlled five-test Python HTTP suite pass during development. Native Unix build, installed-package verification, final Windows installer testing, and release upload evidence will be recorded below when complete. No macOS/Linux live microphone, permission-grant, or editor interaction has been performed on the Windows development host. The packages are unsigned/not notarized. See [Unix installation and build instructions](unix-installation.md).
+Windows validation completed: **140 Rust tests passed, 0 failed, 4 opt-in live checks ignored**; optimized GNU build; five controlled Python HTTP tests; isolated installer/uninstaller; hashes for **1,015 installed files**; bundled Parakeet and Whisper public-fixture recognition with a system-only PATH; default-on stutter setting and embedded source version; repeated initialization and uninstall preserving user settings. The tested executable embeds `ff19184a197e302ab37584131ebad5713049e68b`. The maintainer's running September 16 application was not replaced.
+
+Native Unix build, installed-package verification, and release upload evidence will be recorded below when complete. No macOS/Linux live microphone, permission-grant, or editor interaction has been performed on the Windows development host. The packages are unsigned/not notarized. See [Unix installation and build instructions](unix-installation.md).
 
 ## Previous released baseline — September 19
 
@@ -28,7 +30,7 @@ The files in this repository are the authoritative maintained source. The embedd
 
 This release adds offline installer support, fresh-install settings, dashboard launch shortcuts, and dependency diagnostics to the September 16 terminal-insertion runtime. It does not change dictation formatting or insertion rules. Fresh installs use bundled Parakeet and Faithful cleanup; existing settings are preserved. Ollama remains optional.
 
-## Current behavior
+## September 19 baseline behavior
 
 | Area | Implemented behavior |
 | --- | --- |
@@ -51,13 +53,13 @@ This release adds offline installer support, fresh-install settings, dashboard l
 
 See [CHANGELOG.md](../CHANGELOG.md) for the individual September 8 and September 15 changes, including the return to automatic typing, field-boundary fixes, numeric phrases, refined HUD/chimes, lists, multiline handling, and browser behavior.
 
-## Architecture
+## September 19 baseline architecture
 
 Windows hooks feed a recording controller. Microphone callbacks collect audio; one bounded worker performs resampling, recognition, dictionary normalization, and optional cleanup. The controller commits completed results after destination checks. Separate workers support accessibility inspection, the local dashboard, and the native HUD. Dictionary and optional history use SQLite.
 
 This is a Rust Windows application with local HTTP model services. The `src-tauri` directory and React scaffold are historical; Tauri IPC is not wired. LLM output is collected before insertion; the older descriptions of live token-by-token injection no longer apply.
 
-## Verification
+## Earlier release verification
 
 On September 19, the bundled release passed:
 
@@ -89,7 +91,7 @@ Before the fix, the running app reported a recovered insertion with `caret, sele
 
 The guide's **85-test** count applies to its historical baseline. The separately maintained older project copy produced **109 passed, 1 ignored** during comparison. Neither count describes the current repository.
 
-## Known gaps and follow-up work
+## Follow-up work recorded at the earlier baseline
 
 These are review findings and proposed improvements, **not implemented fixes**:
 
