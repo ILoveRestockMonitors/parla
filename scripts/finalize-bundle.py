@@ -23,6 +23,15 @@ def main():
     licenses.mkdir(exist_ok=True)
     subprocess.run([__import__("sys").executable, str(ROOT / "scripts/collect-rust-notices.py"),
                     "--output", str(licenses / "Rust-dependencies.txt")], check=True)
+    # Preserve the verified MinGW/static-runtime license and exception texts
+    # from the previous Windows distribution as well as current Cargo notices.
+    runtime_notices = licenses / "Windows-runtime-and-baseline-notices.txt"
+    if not runtime_notices.exists():
+        urllib.request.urlretrieve(
+            "https://github.com/ILoveRestockMonitors/parla/releases/download/v0.2.0-terminal-insertion-20260916/THIRD-PARTY-NOTICES.txt",
+            runtime_notices)
+    if sha(runtime_notices) != "fb47566aa9be22a5e3932a28601d2b102a52a338df795e808fb4ca3ab1b6659a":
+        raise RuntimeError("Windows runtime notices failed their recorded checksum")
     extra = {
         "Whisper-model-MIT.txt": "https://raw.githubusercontent.com/openai/whisper/86098128c0b4f24f0e2aa2994de830614b474227/LICENSE",
         "Sherpa-onnx-Apache-2.0.txt": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/917bed95c8e5c7c18aa4d69fea42e9ef8ef0a60e/LICENSE",
@@ -49,7 +58,8 @@ whisper.cpp v1.8.7: MIT license, compiled here from official revision
 Python 3.12.10: Python Software Foundation license, runtime/python/LICENSE.txt.
 sherpa-onnx 1.13.7 and core: Apache-2.0; notices inside runtime/python/Lib/site-packages.
 NumPy 2.4.6 and its bundled libraries: license notices inside their dist-info/licenses folder.
-Rust and dependency notices: licenses/Rust-dependencies.txt (includes GNU runtime exception text).
+Rust dependency notices: licenses/Rust-dependencies.txt.
+Windows runtime licenses/exceptions: licenses/Windows-runtime-and-baseline-notices.txt.
 Installer built with Inno Setup 6.6.1, Copyright Jordan Russell and Martijn Laan.
 https://jrsoftware.org/
 
@@ -62,8 +72,11 @@ Ollama and language models for optional Polished cleanup are not bundled.
             if "__pycache__" in path.parts or path.suffix == ".pyc":
                 continue  # Development caches are preserved locally and excluded by Inno Setup.
             files.append({"path":path.relative_to(PAYLOAD).as_posix(),"bytes":path.stat().st_size,"sha256":sha(path)})
+    build = json.loads((ROOT / "release" / VERSION / "build-record.json").read_text(encoding="utf-8-sig"))
+    if sha(PAYLOAD / "parla.exe") != build["sha256"]:
+        raise RuntimeError("Application does not match the tested build record")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    manifest = {"version":VERSION,"source_commit":revision,"platform":"windows-x64","default_engine":"parakeet",
+    manifest = {"version":VERSION,"source_commit":build["source_commit"],"packaging_commit":revision,"platform":"windows-x64","default_engine":"parakeet",
                 "default_cleanup":"faithful","ollama_included":False,
                 "whisper_source_revision":"48f628a84833905ee4a0658ee6d4a5c915ce1997",
                 "downloads":json.loads((ROOT / "scripts/bundle-sources.json").read_text()),

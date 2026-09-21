@@ -31,4 +31,5 @@ $exe=Join-Path $out 'parla.exe'
 Copy-Item -LiteralPath (Join-Path $target 'release\parla.exe') -Destination $exe -Force
 $hash=(Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
 Set-Content -LiteralPath (Join-Path $out 'SHA256.txt') -Value "$hash  parla.exe"
+[ordered]@{version=$version;source_commit=$env:PARLA_BUILD_REVISION;sha256=$hash.ToLowerInvariant();platform='windows-x64'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'build-record.json') -Encoding utf8
 Write-Output "Release verified and packaged: $out"

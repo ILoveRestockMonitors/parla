@@ -49,7 +49,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: '3.12.14'
+          # Build driver only; the shipped runtime remains pinned to 3.12.14.
+          # setup-python has no macOS 3.12.14 distribution (CI run 35609969265).
+          python-version: '3.12.10'
       - name: Install Linux build and runtime libraries
         if: runner.os == 'Linux'
         run: |

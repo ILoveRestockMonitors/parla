@@ -27,6 +27,14 @@ fn main() {
         std::process::exit(1);
     }
     let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--version") {
+        println!(
+            "Parla {} ({})",
+            include_str!("../../VERSION").trim(),
+            env!("PARLA_SOURCE_REVISION")
+        );
+        return;
+    }
     if args.iter().any(|a| a == "--initialize-bundle") {
         if let Err(error) = bundle::initialize_settings() {
             eprintln!("{error}");
