@@ -92,8 +92,8 @@
       <div id="setup-items"></div>
       <details class="setup-options"><summary>Setup instructions and another speech engine</summary>
         <div class="setup-links">
-          <a href="https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md" target="_blank" rel="noopener noreferrer">Windows setup guide</a>
-          <a href="https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md#optional-parakeet-setup" target="_blank" rel="noopener noreferrer">Set up Parakeet</a>
+          <a id="setup-guide" href="https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md" target="_blank" rel="noopener noreferrer">Windows setup guide</a>
+          <a id="parakeet-guide" href="https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md#optional-parakeet-setup" target="_blank" rel="noopener noreferrer">Set up Parakeet</a>
         </div>
         <div class="sub">Downloads open official sites in a new tab. Install or extract the tool, configure its path if needed, then recheck. Restart Parla after changing model paths or installing Python. File checks do not prove a model has loaded; the Speech server card shows readiness.</div>
       </details>
@@ -135,8 +135,10 @@
         <label>TTL <input id="retry-seconds" type="number" min="1" max="600" style="width:70px"></label>
         <label><input type="checkbox" id="chimes-enabled"> Chimes</label>
         <label><input type="checkbox" id="hud-enabled"> HUD</label>
+        <label><input type="checkbox" id="stutter-correction"> Remove stutters</label>
         <button id="save-settings">Save settings</button><span id="settings-error" class="sub"></span>
       </div>
+      <div class="sub">Remove stutters preserves your wording. Ambiguous emphasis and repeated numbers stay unchanged.</div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="alias" aria-label="Heard spelling" placeholder="heard spelling"><input id="canonical" aria-label="Correct spelling" placeholder="correct spelling"><button id="learn">Learn correction</button><button id="restore">Restore original</button>
       </div>
@@ -158,14 +160,15 @@
       <div class="sub" id="runtime-line">idle</div>
       <div class="sub" id="result-metrics"></div>
       <pre id="last-raw" style="white-space:pre-wrap;margin-top:8px"></pre><pre id="last-normalized" style="white-space:pre-wrap;margin-top:8px"></pre><pre id="last-final" style="white-space:pre-wrap;margin-top:8px"></pre>
-      <button data-cmd="stop">Stop</button> <button data-cmd="cancel">Cancel</button>
+      <button data-cmd="toggle">Start/stop (manual paste)</button> <button data-cmd="stop">Stop</button> <button data-cmd="cancel">Cancel</button>
       <button data-cmd="retry">Retry</button> <button data-cmd="purge">Purge</button>
       <button id="copy-raw">Copy raw</button> <button id="copy-final">Copy final</button>
     </div>
 
     <div class="card wide">
-      <div class="sub">Press <kbd>Ctrl+Space</kbd> to start and again to finish, or hold <kbd>Ctrl+Win</kbd> while speaking. Each recording can last up to 20 minutes. Keep the destination field and caret unchanged while text is processed. Retry creates a preview for you to copy. Audio retention is optional, stays in memory, and expires after the selected TTL in seconds.</div>
-      <div class="sub">Advanced settings: <kbd>%LOCALAPPDATA%\Parla\settings.json</kbd>. Restart after changing keyboard shortcuts, microphone or model paths.</div>
+      <div class="sub">Use the configured toggle shortcut to start and finish, or hold the configured push-to-talk chord while speaking. Each recording can last up to 20 minutes. Keep the destination field and caret unchanged while text is processed. Start/stop from this dashboard and Retry create a result for you to copy and paste. Audio retention is optional, stays in memory, and expires after the selected TTL in seconds.</div>
+      <div class="sub">Advanced settings: <kbd id="settings-path">settings.json</kbd>. Restart after changing keyboard shortcuts, microphone or model paths.</div>
+      <div class="sub" id="platform-guidance"></div>
     </div>
   </div>
 
@@ -192,6 +195,15 @@ const MODE_NOTES = {
 };
 
 function render(d) {
+  const platform=d.platform||{};
+  $("settings-path").textContent=platform.settings_path||"settings.json";
+  $("platform-guidance").textContent=platform.guidance||"";
+  $("hud-enabled").disabled=platform.native_hud===false;
+  if(platform.os && platform.os!=="windows") {
+    $("setup-guide").textContent="Installation guide";
+    $("setup-guide").href="https://github.com/ILoveRestockMonitors/parla#readme";
+    $("parakeet-guide").href="https://github.com/ILoveRestockMonitors/parla#readme";
+  }
   const asrUp = !!(d.asr && d.asr.alive);
   const fmtUp = !!(d.formatter && d.formatter.alive);
   const pin = !!(d.formatter && d.formatter.loaded);
@@ -238,7 +250,7 @@ function render(d) {
   const s = d.settings || {};
   if ((s.cleanup_mode || "faithful") === "faithful") { $("fmt-chip").textContent="unused in Faithful"; $("fmt-chip").className="chip"; }
   if (!window.settingsDirty) {
-    $("cleanup-mode").value=s.cleanup_mode||"faithful"; $("retain-audio").checked=!!s.retain_audio_for_retry; $("retry-seconds").value=s.retry_audio_seconds||120; $("chimes-enabled").checked=s.chimes_enabled!==false; $("hud-enabled").checked=s.hud_enabled!==false;
+    $("cleanup-mode").value=s.cleanup_mode||"faithful"; $("stutter-correction").checked=s.stutter_correction!==false; $("retain-audio").checked=!!s.retain_audio_for_retry; $("retry-seconds").value=s.retry_audio_seconds||120; $("chimes-enabled").checked=s.chimes_enabled!==false; $("hud-enabled").checked=s.hud_enabled!==false;
   }
   const rt = d.runtime || {};
   $("runtime-line").textContent = (rt.mode || "idle") + (rt.recording ? " · " + Math.floor((rt.recording_elapsed_ms||0)/1000) + "s" : "") + " · outstanding " + (rt.queued || 0) + (rt.processing ? " · processing" : "") + (rt.error ? " · " + rt.error : "");
@@ -269,9 +281,9 @@ function render(d) {
   else                            { dot.className = "dot bad"; }
 }
 window.settingsDirty=false;
-document.querySelectorAll("#cleanup-mode,#retain-audio,#retry-seconds,#chimes-enabled,#hud-enabled").forEach(e=>e.addEventListener("input",()=>window.settingsDirty=true));
+document.querySelectorAll("#cleanup-mode,#retain-audio,#retry-seconds,#chimes-enabled,#hud-enabled,#stutter-correction").forEach(e=>e.addEventListener("input",()=>window.settingsDirty=true));
 async function postJson(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-Parla-Control":"1"},body:JSON.stringify(body)});let d={};try{d=await r.json()}catch(_){}if(!r.ok)throw new Error(d.error||"request failed");return d;}
-$("save-settings").onclick=async()=>{try{await postJson("/api/settings",{cleanup_mode:$("cleanup-mode").value,retain_audio_for_retry:$("retain-audio").checked,retry_audio_seconds:Number($("retry-seconds").value),chimes_enabled:$("chimes-enabled").checked,hud_enabled:$("hud-enabled").checked});$("settings-error").textContent="Saved";window.settingsDirty=false;poll();checkSetup()}catch(e){$("settings-error").textContent=e.message}};
+$("save-settings").onclick=async()=>{try{await postJson("/api/settings",{cleanup_mode:$("cleanup-mode").value,stutter_correction:$("stutter-correction").checked,retain_audio_for_retry:$("retain-audio").checked,retry_audio_seconds:Number($("retry-seconds").value),chimes_enabled:$("chimes-enabled").checked,hud_enabled:$("hud-enabled").checked});$("settings-error").textContent="Saved";window.settingsDirty=false;poll();checkSetup()}catch(e){$("settings-error").textContent=e.message}};
 $("learn").onclick=async()=>{try{await postJson("/api/command",{command:"learn",alias:$("alias").value,canonical:$("canonical").value});$("settings-error").textContent="Correction queued; check status for errors"}catch(e){$("settings-error").textContent=e.message}};
 $("restore").onclick=async()=>{try{await postJson("/api/command",{command:"restore"});$("settings-error").textContent="Restore requested"}catch(e){$("settings-error").textContent=e.message}};
 

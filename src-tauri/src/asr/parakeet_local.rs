@@ -68,16 +68,9 @@ impl ParakeetClient {
     }
 
     pub fn runtime_directory(&self) -> Result<std::path::PathBuf, String> {
-        if crate::bundle::installed().is_some() {
-            return Ok(std::path::PathBuf::from(
-                std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA unavailable")?,
-            )
-            .join("Parla/runtime/parakeet"));
-        }
-        std::path::Path::new(&self.model_dir)
-            .parent()
-            .map(|p| p.to_path_buf())
-            .ok_or_else(|| "parakeet model dir has no parent".into())
+        // Never write generated code/logs beside installed, potentially
+        // read-only model weights (especially /Applications and /opt).
+        Ok(crate::platform::data_dir().join("runtime/parakeet"))
     }
 
     /// Bundled installations keep generated code/logs outside installed models.
@@ -96,10 +89,17 @@ impl ParakeetClient {
 
 fn health_matches(value: &serde_json::Value, model_dir: &str) -> bool {
     let normalize = |path: &str| {
-        path.trim_start_matches(r"\\?\")
-            .replace('/', "\\")
-            .trim_end_matches('\\')
-            .to_lowercase()
+        #[cfg(windows)]
+        {
+            path.trim_start_matches(r"\\?\")
+                .replace('/', "\\")
+                .trim_end_matches('\\')
+                .to_lowercase()
+        }
+        #[cfg(not(windows))]
+        {
+            path.trim_end_matches('/').to_string()
+        }
     };
     let expected = std::fs::canonicalize(model_dir)
         .map(|p| p.to_string_lossy().into_owned())
@@ -118,11 +118,13 @@ mod health_tests {
     use super::*;
     #[test]
     fn health_requires_ready_protocol_and_matching_model_directory() {
-        let mut value = serde_json::json!({"ok":true,"backend":"parakeet","protocol_version":2,"model_directory":"C:/model-a"});
-        assert!(health_matches(&value, "C:\\model-a"));
-        assert!(!health_matches(&value, "C:\\model-b"));
+        let path = std::env::temp_dir().join("parla-missing-model-a");
+        let expected = path.to_string_lossy();
+        let mut value = serde_json::json!({"ok":true,"backend":"parakeet","protocol_version":2,"model_directory":expected});
+        assert!(health_matches(&value, &expected));
+        assert!(!health_matches(&value, "/different/model-b"));
         value["ok"] = serde_json::json!(false);
-        assert!(!health_matches(&value, "C:\\model-a"));
+        assert!(!health_matches(&value, &expected));
         assert!(!health_matches(
             &serde_json::json!({"ok":true}),
             "C:\\model-a"

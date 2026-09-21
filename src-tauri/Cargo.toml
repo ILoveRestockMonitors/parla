@@ -1,6 +1,6 @@
 [package]
 name = "parla"
-version = "0.2.0"
+version = "0.3.0"
 description = "Parla - local-first system-wide voice dictation (clean-room clone)"
 edition = "2021"
 
@@ -16,6 +16,12 @@ rusqlite = { version = "0.32", features = ["bundled"] } # WinLibs gcc compiles s
 arboard = "3"
 enigo = "0.2"
 cpal = "0.15"
+
+[target.'cfg(unix)'.dependencies]
+rdev = "0.5.3"
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
 windows = { version = "0.56", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",

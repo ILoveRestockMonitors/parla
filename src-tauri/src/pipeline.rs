@@ -40,8 +40,10 @@ impl Controller {
                 Action::Cancel
             }
             TriggerEvent::PttEnd if self.recording == Some(RecordingMode::Hold) => Action::Finish,
-            TriggerEvent::Toggle if self.recording.is_some() => Action::Finish,
-            TriggerEvent::Toggle if self.outstanding < capacity => {
+            TriggerEvent::Toggle | TriggerEvent::ManualToggle if self.recording.is_some() => {
+                Action::Finish
+            }
+            TriggerEvent::Toggle | TriggerEvent::ManualToggle if self.outstanding < capacity => {
                 Action::Start(RecordingMode::Toggle)
             }
             TriggerEvent::PttStart if self.recording.is_none() && self.outstanding < capacity => {
@@ -107,6 +109,13 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
         result.raw = Some(raw.text.clone());
         let normalized = dictionary::apply::apply_snapshot(&raw.text, &vocabulary);
         result.normalized = Some(normalized.clone());
+        let t = Instant::now();
+        let normalized = if job.settings.stutter_correction {
+            formatter::disfluency::clean(&normalized, &vocabulary.canonical).into_owned()
+        } else {
+            normalized
+        };
+        timings["stutter_cleanup"] = serde_json::json!(t.elapsed().as_millis());
         result.final_text = Some(normalized.clone());
         // Numbers work everywhere; browsers keep prose and writing apps get
         // automatic lists. Retain raw/normalized words for original recovery.
@@ -233,7 +242,7 @@ fn finish(
         clip: Arc::new(clip),
         settings: active.settings,
         entries: active.entries,
-        target: Some(active.target),
+        target: (active.target.hwnd != 0).then_some(active.target),
         app: active.app,
         queued_at: Instant::now(),
         finalize_ms: t.elapsed().as_millis(),
@@ -274,7 +283,7 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
     });
     loop {
         runtime::expire_audio();
-        let mut events: Vec<_> = hotkey::windows::poll_timed_events()
+        let mut events: Vec<_> = hotkey::poll_timed_events()
             .into_iter()
             .map(|(e, t)| (Some(e), t))
             .collect();
@@ -379,13 +388,19 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
                         continue;
                     }
                     let started = Instant::now();
-                    let target = TargetSnapshot::capture(120);
-                    if target.context.password || target.hwnd == 0 {
+                    let manual = matches!(event, Some(TriggerEvent::ManualToggle));
+                    let mut target = TargetSnapshot::capture(120);
+                    if target.context.password || (cfg!(windows) && target.hwnd == 0 && !manual) {
                         let _ = mic.stop_at(Instant::now(), Duration::ZERO);
                         error("Dictation cannot start in this field.");
                         continue;
                     }
-                    let app = context::windows::exe_for_window(target.hwnd);
+                    let app = context::native::exe_for_window(target.hwnd);
+                    // A dashboard or CLI trigger does not identify the user's
+                    // intended destination. Record normally, then offer Copy.
+                    if manual {
+                        target.hwnd = 0;
+                    }
                     controller.recording = Some(mode);
                     runtime::update(|s| {
                         s.recording = true;

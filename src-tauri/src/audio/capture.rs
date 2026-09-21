@@ -22,6 +22,10 @@ struct Span {
     frames: usize,
     at: Instant,
 }
+// Keep stop-time copying bounded to 1 MiB (about 5.5 seconds at 48 kHz).
+// Longer recordings transfer ownership as before: copying them solely to
+// retain a reservation costs more than the next reservation saves.
+const MAX_REUSE_COPY_SAMPLES: usize = 1024 * 1024 / std::mem::size_of::<f32>();
 struct Shared {
     recording: bool,
     buf: Vec<f32>,
@@ -38,6 +42,46 @@ struct Shared {
     spans: Vec<Span>,
 }
 impl Shared {
+    fn clear_audio(&mut self) {
+        // Keep the allocation, not the recording. In particular, a cancelled
+        // or completed utterance must not linger in reusable idle storage.
+        self.buf.fill(0.0);
+        self.buf.clear();
+        self.spans.clear();
+        self.carry_sum = 0.0;
+        self.carry_count = 0;
+        self.carry_at = None;
+    }
+    fn prepare_buffer(&mut self) -> Result<(), String> {
+        self.recording = false;
+        self.clear_audio();
+        // Short recordings retain this allocation for the next start. Taking
+        // and shrinking at every stop used to discard the entire reservation.
+        self.buf.try_reserve_exact(self.max_samples).map_err(|_| {
+            "Not enough memory for the configured recording limit; reduce max_recording_seconds."
+                .to_string()
+        })
+    }
+    fn finish_samples(&mut self) -> Result<Vec<f32>, String> {
+        self.recording = false;
+        if self.buf.len() > MAX_REUSE_COPY_SAMPLES {
+            let mut samples = std::mem::take(&mut self.buf);
+            self.clear_audio();
+            samples.shrink_to_fit();
+            return Ok(samples);
+        }
+        let mut samples = Vec::new();
+        if samples.try_reserve_exact(self.buf.len()).is_err() {
+            self.clear_audio();
+            return Err("Not enough memory to finish this recording.".into());
+        }
+        // Pending clips own only their actual frames, while the callback
+        // buffer remains preallocated for the next recording. No allocation
+        // or additional synchronization is introduced in the audio callback.
+        samples.extend_from_slice(&self.buf);
+        self.clear_audio();
+        Ok(samples)
+    }
     fn ingest(&mut self, input: impl Iterator<Item = f32>, packet_at: Instant) {
         let offset = self.buf.len();
         let mut first_at = None;
@@ -102,7 +146,11 @@ impl Shared {
                 .min(span.frames)
             };
             if accepted < span.frames {
-                self.buf.truncate(span.offset + accepted);
+                let retained = span.offset + accepted;
+                // A stop event may arrive after packets past its timestamp.
+                // Erase that rejected tail before retaining the allocation.
+                self.buf[retained..].fill(0.0);
+                self.buf.truncate(retained);
                 self.covered_endpoint = true;
                 break;
             }
@@ -230,15 +278,7 @@ impl MicCapture {
         if let Some(error) = &s.error {
             return Err(format!("Microphone needs reopening: {error}"));
         }
-        s.buf.clear();
-        let maximum = s.max_samples;
-        s.buf.try_reserve_exact(maximum).map_err(|_| {
-            "Not enough memory for the configured recording limit; reduce max_recording_seconds."
-        })?;
-        s.spans.clear();
-        s.carry_sum = 0.0;
-        s.carry_count = 0;
-        s.carry_at = None;
+        s.prepare_buffer()?;
         s.endpoint = None;
         s.covered_endpoint = false;
         s.recording = true;
@@ -247,6 +287,7 @@ impl MicCapture {
         if let Err(e) = self.stream.play() {
             if let Ok(mut s) = self.shared.lock() {
                 s.recording = false;
+                s.clear_audio();
                 s.error = Some(e.to_string());
             }
             return Err(e.to_string());
@@ -273,11 +314,10 @@ impl MicCapture {
             }
             std::thread::sleep(Duration::from_millis(2));
         }
-        let (mut samples, started, error) = {
+        let (samples, started, error) = {
             let mut s = self.shared.lock().map_err(|_| "Audio lock unavailable.")?;
-            s.recording = false;
             (
-                std::mem::take(&mut s.buf),
+                s.finish_samples(),
                 s.started.unwrap_or(end),
                 s.error.clone(),
             )
@@ -287,9 +327,7 @@ impl MicCapture {
                 shared.error = Some(e.to_string());
             }
         }
-        // Short clips must not hold an entire 20-minute allocation while
-        // waiting behind another job. Callback storage stays preallocated.
-        samples.shrink_to_fit();
+        let samples = samples?;
         if let Some(e) = error {
             if samples.is_empty() {
                 return Err(e);
@@ -369,5 +407,138 @@ mod tests {
         assert_eq!(s.buf, vec![0., 0.5]);
         assert!(!s.recording);
         assert!(s.carry_count < 2);
+    }
+    #[test]
+    fn repeated_recordings_reuse_storage_and_return_independent_tight_clips() {
+        let t = Instant::now();
+        let mut s = shared(t, 1);
+        s.max_samples = 1000;
+        s.prepare_buffer().unwrap();
+        let pointer = s.buf.as_ptr();
+        let capacity = s.buf.capacity();
+        let mut previous = None;
+        for round in 0..20 {
+            s.prepare_buffer().unwrap();
+            s.started = Some(t);
+            s.endpoint = None;
+            s.covered_endpoint = false;
+            s.recording = true;
+            let expected = vec![round as f32, 0.25, -0.5];
+            s.ingest(expected.iter().copied(), t);
+            let clip = s.finish_samples().unwrap();
+            assert_eq!(clip, expected);
+            assert!(clip.capacity() < capacity);
+            assert_eq!(s.buf.as_ptr(), pointer);
+            assert_eq!(s.buf.capacity(), capacity);
+            assert!(s.buf.is_empty());
+            assert!(!s.recording);
+            if let Some(old_clip) = previous {
+                assert_eq!(old_clip, vec![(round - 1) as f32, 0.25, -0.5]);
+            }
+            previous = Some(clip);
+        }
+    }
+    #[test]
+    fn completion_erases_used_storage_and_partial_channel_carry() {
+        let t = Instant::now();
+        let mut s = shared(t, 2);
+        s.prepare_buffer().unwrap();
+        s.recording = true;
+        s.ingest([0.5, 0.5, -0.25, -0.25, 0.75].into_iter(), t);
+        let pointer = s.buf.as_ptr();
+        let initialized = s.buf.len();
+        assert_eq!(s.carry_count, 1);
+        assert_eq!(s.finish_samples().unwrap(), vec![0.5, -0.25]);
+        assert_eq!(s.buf.as_ptr(), pointer);
+        // SAFETY: finish_samples retains this allocation. These f32 slots
+        // were initialized before clearing; inspecting them verifies erasure,
+        // not uninitialized spare capacity. No mutation occurs during the read.
+        let cleared = unsafe { std::slice::from_raw_parts(pointer, initialized) };
+        assert!(cleared.iter().all(|sample| *sample == 0.0));
+        assert_eq!(s.carry_sum, 0.0);
+        assert_eq!(s.carry_count, 0);
+        assert!(s.carry_at.is_none());
+        assert!(s.spans.is_empty());
+    }
+    #[test]
+    fn endpoint_erases_rejected_tail_before_buffer_reuse() {
+        let t = Instant::now();
+        let mut s = shared(t, 1);
+        s.prepare_buffer().unwrap();
+        s.recording = true;
+        s.ingest([1., 2., 3., 4., 5.].into_iter(), t);
+        let pointer = s.buf.as_ptr();
+        let initialized = s.buf.len();
+        s.end_at(t + Duration::from_millis(1));
+        assert_eq!(s.buf, vec![1., 2.]);
+        // SAFETY: end_at only overwrites/truncates, retaining the allocation
+        // and initialization of all five original slots.
+        let storage = unsafe { std::slice::from_raw_parts(pointer, initialized) };
+        assert_eq!(storage, &[1., 2., 0., 0., 0.]);
+        assert_eq!(s.finish_samples().unwrap(), vec![1., 2.]);
+    }
+    #[test]
+    fn next_recording_excludes_idle_pre_start_and_prior_partial_frames() {
+        let t = Instant::now();
+        let mut s = shared(t, 2);
+        s.prepare_buffer().unwrap();
+        s.recording = true;
+        s.ingest([0.75].into_iter(), t);
+        assert!(s.finish_samples().unwrap().is_empty());
+        s.ingest([1., 1.].into_iter(), t + Duration::from_secs(1));
+        assert!(s.buf.is_empty());
+
+        s.prepare_buffer().unwrap();
+        s.started = Some(t + Duration::from_millis(2));
+        s.endpoint = None;
+        s.covered_endpoint = false;
+        s.recording = true;
+        s.ingest([1., 1., 2., 2., 3., 3., 4., 4.].into_iter(), t);
+        s.end_at(t + Duration::from_millis(2));
+        assert_eq!(s.finish_samples().unwrap(), vec![3.]);
+    }
+    #[test]
+    fn reused_buffer_preserves_late_endpoint_drain_and_maximum_length() {
+        let t = Instant::now();
+        let mut s = shared(t, 1);
+        s.max_samples = 3;
+        for end_ms in [1, 5] {
+            s.prepare_buffer().unwrap();
+            s.started = Some(t);
+            s.endpoint = None;
+            s.covered_endpoint = false;
+            s.recording = true;
+            s.end_at(t + Duration::from_millis(end_ms));
+            s.ingest([1., 2., 3., 4., 5.].into_iter(), t);
+            assert!(s.buf.len() <= s.max_samples);
+            let clip = s.finish_samples().unwrap();
+            assert_eq!(
+                clip,
+                if end_ms == 1 {
+                    vec![1., 2.]
+                } else {
+                    vec![1., 2., 3.]
+                }
+            );
+        }
+    }
+    #[test]
+    fn long_clips_transfer_storage_instead_of_adding_a_full_copy() {
+        let t = Instant::now();
+        let mut s = shared(t, 1);
+        s.max_samples = MAX_REUSE_COPY_SAMPLES + 10;
+        s.prepare_buffer().unwrap();
+        s.buf.resize(MAX_REUSE_COPY_SAMPLES + 1, 0.25);
+        s.carry_sum = 0.5;
+        s.carry_count = 1;
+        s.carry_at = Some(t);
+        let clip = s.finish_samples().unwrap();
+        assert_eq!(clip.len(), MAX_REUSE_COPY_SAMPLES + 1);
+        assert!(clip.iter().all(|sample| *sample == 0.25));
+        assert!(s.buf.is_empty());
+        assert_eq!(s.buf.capacity(), 0);
+        assert_eq!(s.carry_sum, 0.0);
+        assert_eq!(s.carry_count, 0);
+        assert!(s.carry_at.is_none());
     }
 }

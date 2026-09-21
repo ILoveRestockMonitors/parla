@@ -115,6 +115,12 @@ impl BackendManager {
                         "owned whisper process uses a different model; restart required".into(),
                     );
                 }
+                // An owned, already-ready process with unchanged identity is
+                // warm. try_wait above detects exits; don't pay a localhost
+                // health round-trip before every utterance.
+                if slot.child.is_some() && slot.state == ProcessState::Running {
+                    return Ok(Box::new(WhisperServerClient::new(port)));
+                }
                 if !alive() {
                     let port_open = std::net::TcpStream::connect_timeout(
                         &([127, 0, 0, 1], port).into(),
@@ -163,10 +169,6 @@ impl BackendManager {
             }
             AsrBackend::Parakeet => {
                 let client = parakeet_local::ParakeetClient::from_settings(settings);
-                if !client.weights_present() {
-                    return Err(format!("parakeet weights missing in {}", client.model_dir));
-                }
-                client.ensure_shim_deployed()?;
                 let identity = format!("parakeet:{}", client.model_dir);
                 let mut slot = self.parakeet.lock().map_err(|_| "backend mutex poisoned")?;
                 let _ = poll_child(&mut slot, "parakeet")?;
@@ -177,6 +179,13 @@ impl BackendManager {
                         "owned parakeet process uses a different model; restart required".into(),
                     );
                 }
+                if slot.child.is_some() && slot.state == ProcessState::Running {
+                    return Ok(Box::new(client));
+                }
+                if !client.weights_present() {
+                    return Err(format!("parakeet weights missing in {}", client.model_dir));
+                }
+                client.ensure_shim_deployed()?;
                 if !client.alive() {
                     let port_open = std::net::TcpStream::connect_timeout(
                         &([127, 0, 0, 1], 9293).into(),
@@ -333,12 +342,19 @@ pub fn parakeet_python() -> String {
         if let Some(bundle) = crate::bundle::installed() {
             return bundle.python;
         }
-        let installed = std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default())
-            .join("Programs/Python/Python312/python.exe");
-        if installed.is_file() {
-            installed.to_string_lossy().into_owned()
-        } else {
+        #[cfg(windows)]
+        {
+            let installed =
+                std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default())
+                    .join("Programs/Python/Python312/python.exe");
+            if installed.is_file() {
+                return installed.to_string_lossy().into_owned();
+            }
             "python".into()
+        }
+        #[cfg(not(windows))]
+        {
+            "python3".into()
         }
     })
 }
@@ -375,7 +391,16 @@ fn spawn_shim(client: &parakeet_local::ParakeetClient) -> Result<std::process::C
 
 fn spawn_whisper(exe: &str, model: &str, port: u16) -> Result<std::process::Child, String> {
     let mut cmd = std::process::Command::new(exe);
-    cmd.args(["-m", model, "-l", "en", "--port", &port.to_string()]);
+    cmd.args([
+        "-m",
+        model,
+        "-l",
+        "en",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        &port.to_string(),
+    ]);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

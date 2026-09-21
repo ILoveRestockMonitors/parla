@@ -43,6 +43,9 @@ pub struct Settings {
     pub parakeet_model_dir: String,
     #[serde(default = "default_cleanup_mode")]
     pub cleanup_mode: String,
+    /// Remove explicit stutters without paraphrasing or collapsing emphasis.
+    #[serde(default = "default_stutter_correction")]
+    pub stutter_correction: bool,
     #[serde(default = "default_max_recording_seconds")]
     pub max_recording_seconds: u32,
     #[serde(default = "default_max_pending_utterances")]
@@ -74,7 +77,15 @@ fn default_chimes_enabled() -> bool {
     true
 }
 fn default_toggle_chord() -> String {
-    "ctrl+space".into()
+    if cfg!(windows) {
+        "ctrl+space"
+    } else {
+        "ctrl+alt+space"
+    }
+    .into()
+}
+fn default_stutter_correction() -> bool {
+    true
 }
 fn default_cleanup_mode() -> String {
     "faithful".into()
@@ -99,10 +110,16 @@ fn default_hud_enabled() -> bool {
 }
 
 fn default_parakeet_dir() -> String {
-    format!(
+    #[cfg(windows)]
+    return format!(
         "{}\\Temp\\parla-parakeet\\model",
         std::env::var("LOCALAPPDATA").unwrap_or_default()
-    )
+    );
+    #[cfg(not(windows))]
+    return crate::platform::data_dir()
+        .join("models/parakeet")
+        .to_string_lossy()
+        .into_owned();
 }
 
 impl Settings {
@@ -137,7 +154,9 @@ pub fn default_chord() -> HotkeyChord {
 /// A generic token accepts either physical side plus the shared VK;
 /// side-specific tokens bind one VK. Unknown token => None.
 pub fn parse_chord(s: &str) -> Option<HotkeyChord> {
-    const GENERIC: &[&str] = &["CTRL", "CONTROL", "WIN", "SUPER", "ALT", "MENU", "SHIFT"];
+    const GENERIC: &[&str] = &[
+        "CTRL", "CONTROL", "WIN", "SUPER", "CMD", "COMMAND", "ALT", "OPTION", "MENU", "SHIFT",
+    ];
     let mut sets: Vec<Vec<u32>> = Vec::new();
     let mut side_specific_only = true;
     for tok in s.split('+') {
@@ -147,10 +166,10 @@ pub fn parse_chord(s: &str) -> Option<HotkeyChord> {
             "CTRL" | "CONTROL" => &[0x11, 0xA2, 0xA3],
             "LCTRL" => &[0xA2],
             "RCTRL" => &[0xA3],
-            "WIN" | "SUPER" => &[0x5B, 0x5C],
+            "WIN" | "SUPER" | "CMD" | "COMMAND" => &[0x5B, 0x5C],
             "LWIN" => &[0x5B],
             "RWIN" => &[0x5C],
-            "ALT" | "MENU" => &[0x12, 0xA4, 0xA5],
+            "ALT" | "OPTION" | "MENU" => &[0x12, 0xA4, 0xA5],
             "LALT" => &[0xA4],
             "RALT" => &[0xA5],
             "SHIFT" => &[0x10, 0xA0, 0xA1],
@@ -225,11 +244,26 @@ impl Default for Settings {
             asr_model_path: bundle
                 .as_ref()
                 .map(|b| b.whisper_model.clone())
-                .unwrap_or_else(|| format!("{}\\Temp\\parla-models\\ggml-small.bin", la)),
+                .unwrap_or_else(|| {
+                    if cfg!(windows) {
+                        format!("{}\\Temp\\parla-models\\ggml-small.bin", la)
+                    } else {
+                        crate::platform::data_dir()
+                            .join("models/ggml-small.bin")
+                            .to_string_lossy()
+                            .into_owned()
+                    }
+                }),
             asr_server_exe: bundle
                 .as_ref()
                 .map(|b| b.whisper.clone())
                 .unwrap_or_else(|| {
+                    if !cfg!(windows) {
+                        return crate::platform::data_dir()
+                            .join("runtime/whisper/whisper-server")
+                            .to_string_lossy()
+                            .into_owned();
+                    }
                     format!(
                         "{}\\Temp\\parla-whisper\\bin-cublas\\Release\\whisper-server.exe",
                         la
@@ -251,6 +285,7 @@ impl Default for Settings {
                 .map(|b| b.parakeet_model.clone())
                 .unwrap_or_else(default_parakeet_dir),
             cleanup_mode: default_cleanup_mode(),
+            stutter_correction: default_stutter_correction(),
             max_recording_seconds: default_max_recording_seconds(),
             max_pending_utterances: default_max_pending_utterances(),
             retain_audio_for_retry: false,
@@ -264,10 +299,9 @@ impl Default for Settings {
 }
 
 fn settings_path() -> String {
-    format!(
-        "{}\\Parla\\settings.json",
-        std::env::var("LOCALAPPDATA").unwrap_or_default()
-    )
+    crate::platform::settings_path()
+        .to_string_lossy()
+        .into_owned()
 }
 
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -421,7 +455,8 @@ impl Settings {
         self.capture_drain_ms = self.capture_drain_ms.clamp(0, 500);
     }
     pub fn toggle_hotkey_chord(&self) -> HotkeyChord {
-        parse_chord(&self.toggle_chord).unwrap_or_else(|| parse_chord("ctrl+space").unwrap())
+        parse_chord(&self.toggle_chord)
+            .unwrap_or_else(|| parse_chord(&default_toggle_chord()).unwrap())
     }
 }
 
@@ -432,10 +467,13 @@ mod tests {
     // Hermetic: each test gets its own file under LOCALAPPDATA\Temp so
     // parallel test threads never touch each other or the live config.
     fn tmp_settings_path(tag: &str) -> String {
-        format!(
-            "{}\\Temp\\parla-test-settings-{tag}.json",
-            std::env::var("LOCALAPPDATA").unwrap_or_default()
-        )
+        std::env::temp_dir()
+            .join(format!(
+                "parla-test-settings-{}-{tag}.json",
+                std::process::id()
+            ))
+            .to_string_lossy()
+            .into_owned()
     }
 
     #[test]
@@ -500,6 +538,9 @@ mod tests {
 
     #[test]
     fn parse_chord_tokens() {
+        assert!(parse_chord("ctrl+command").is_some());
+        assert!(parse_chord("control+option+space").is_some());
+        assert!(parse_chord("cmd").is_none());
         // ctrl+win: ctrl held first, win is the trigger key
         let c = parse_chord("ctrl+win").unwrap();
         assert_eq!(c.sets.len(), 2);
@@ -558,7 +599,11 @@ mod tests {
         .unwrap();
         let s = Settings::load_from(&path);
         assert_eq!(s.asr_backend_kind(), AsrBackend::Whisper);
-        assert!(s.parakeet_model_dir.ends_with("parla-parakeet\\model"));
+        assert!(
+            s.stutter_correction,
+            "existing settings gain stutter correction by default"
+        );
+        assert_eq!(s.parakeet_model_dir, default_parakeet_dir());
         let _ = std::fs::remove_file(&path);
     }
 }

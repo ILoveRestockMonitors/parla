@@ -16,11 +16,16 @@ mod hud;
 mod inject;
 mod ipc;
 mod pipeline;
+mod platform;
 mod runtime;
 mod setup;
 mod store;
 
 fn main() {
+    if let Err(error) = platform::initialize() {
+        eprintln!("[parla] {error}");
+        std::process::exit(1);
+    }
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--initialize-bundle") {
         if let Err(error) = bundle::initialize_settings() {
@@ -82,61 +87,34 @@ fn main() {
 }
 
 fn run_live(open_dashboard: bool) {
-    unsafe {
-        use windows::core::PCWSTR;
-        use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
-        use windows::Win32::System::Threading::CreateMutexW;
-        let name: Vec<u16> = "Local\\Parla.SingleInstance.v1\0".encode_utf16().collect();
-        match CreateMutexW(None, false, PCWSTR(name.as_ptr())) {
-            Ok(_) if GetLastError() == ERROR_ALREADY_EXISTS => {
-                if open_dashboard {
-                    dashboard::open_in_browser();
-                }
-                return;
+    let _instance = match platform::SingleInstance::acquire() {
+        Ok(Some(instance)) => instance,
+        Ok(None) => {
+            if open_dashboard {
+                dashboard::open_in_browser();
             }
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("[parla] cannot establish single instance: {e}");
-                return;
-            }
+            return;
         }
-    }
+        Err(e) => {
+            eprintln!("[parla] cannot establish single instance: {e}");
+            return;
+        }
+    };
     let settings = store::settings::Settings::load();
     runtime::init(settings.clone());
     hud::spawn();
-    hotkey::windows::set_hotkeys(settings.hotkey_chords(), settings.toggle_hotkey_chord());
+    hotkey::set_hotkeys(settings.hotkey_chords(), settings.toggle_hotkey_chord());
     match dashboard::spawn() {
         Err(e) => runtime::update(|s| s.error = Some(e)),
         Ok(()) => {
-            let configured =
-                std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default())
-                    .join("Parla/settings.json")
-                    .is_file();
+            let configured = platform::settings_path().is_file();
             if !configured || open_dashboard {
                 dashboard::open_in_browser();
             }
         }
     }
     asr::set_backend(settings.asr_backend_kind());
-    std::thread::spawn(|| {
-        let mut hook = hotkey::WindowsLlHook::new();
-        if let Err(e) = hotkey::HotkeyManager::start(&mut hook) {
-            runtime::update(|s| s.error = Some(format!("Keyboard shortcut unavailable: {e}")));
-            return;
-        }
-        runtime::update(|s| s.hook_ready = true);
-        unsafe {
-            use windows::Win32::UI::WindowsAndMessaging::{
-                DispatchMessageW, GetMessageW, TranslateMessage, MSG,
-            };
-            let mut msg = MSG::default();
-            while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
-                let _ = TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
-        }
-        runtime::update(|s| s.hook_ready = false);
-    });
+    hotkey::spawn_listener();
     let mut mic = match audio::capture::MicCapture::open_with_settings(&settings) {
         Ok(mic) => mic,
         Err(e) => {
@@ -151,8 +129,7 @@ fn run_live(open_dashboard: bool) {
             }
         }
     };
-    let folder =
-        std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default()).join("Parla");
+    let folder = platform::data_dir();
     let _ = std::fs::create_dir_all(&folder);
     let dictionary_path = folder.join("dictionary.sqlite");
     let dict = match dictionary::Dictionary::open(&dictionary_path.to_string_lossy()) {

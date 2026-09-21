@@ -1,8 +1,21 @@
 // Context awareness v1: frontmost executable -> app_category for the §7.2
 // envelope. Pure mapping below is unit-tested; the Win32 probe reads the
 // foreground window's process image name.
+#[cfg(windows)]
 pub mod target;
+#[cfg(not(windows))]
+#[path = "portable_target.rs"]
+pub mod target;
+#[cfg(windows)]
 pub mod windows;
+#[cfg(windows)]
+pub use windows as native;
+#[cfg(target_os = "macos")]
+#[path = "macos.rs"]
+pub mod native;
+#[cfg(target_os = "linux")]
+#[path = "linux.rs"]
+pub mod native;
 
 /// What to do with the first word of an insertion, given the text before it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +87,23 @@ pub fn is_browser_exe(exe: &str) -> bool {
         "floorp.exe",
         "librewolf.exe",
         "iexplore.exe",
+        "Google Chrome",
+        "chrome",
+        "chromium",
+        "chromium-browser",
+        "firefox",
+        "Safari",
+        "Microsoft Edge",
+        "Brave Browser",
+        "brave",
+        "brave-browser",
+        "Opera",
+        "Vivaldi",
+        "Arc",
+        "zen",
+        "waterfox",
+        "floorp",
+        "librewolf",
     ]
     .iter()
     .any(|browser| name.eq_ignore_ascii_case(browser))
@@ -82,14 +112,69 @@ pub fn is_browser_exe(exe: &str) -> bool {
 /// Known native terminal hosts. Match basenames, not command or window titles.
 pub fn is_terminal_exe(exe: &str) -> bool {
     let name = exe.rsplit(['\\', '/']).next().unwrap_or(exe);
-    ["WindowsTerminal.exe", "conhost.exe", "OpenConsole.exe"]
-        .iter()
-        .any(|terminal| name.eq_ignore_ascii_case(terminal))
+    [
+        "WindowsTerminal.exe",
+        "conhost.exe",
+        "OpenConsole.exe",
+        "Terminal",
+        "iTerm2",
+        "iTerm",
+        "kitty",
+        "Alacritty",
+        "alacritty",
+        "gnome-terminal-server",
+        "gnome-terminal",
+        "konsole",
+        "xterm",
+        "uxterm",
+        "wezterm-gui",
+        "foot",
+        "ghostty",
+        "tilix",
+        "terminator",
+    ]
+    .iter()
+    .any(|terminal| name.eq_ignore_ascii_case(terminal))
 }
 
 /// Map an executable to the formatter's app category.
 pub fn category_for_exe(exe: &str) -> &'static str {
     let e = exe.to_ascii_lowercase();
+    let basename = e.rsplit(['\\', '/']).next().unwrap_or(&e);
+    if [
+        "code",
+        "cursor",
+        "code - insiders",
+        "visual studio code",
+        "sublime_text",
+        "sublime text",
+        "nvim",
+        "vim",
+        "idea",
+        "pycharm",
+        "webstorm",
+        "goland",
+        "clion",
+        "rider",
+        "zed",
+    ]
+    .contains(&basename)
+    {
+        return "code";
+    }
+    if [
+        "slack", "discord", "teams", "telegram", "signal", "whatsapp",
+    ]
+    .contains(&basename)
+    {
+        return "work_chat";
+    }
+    if ["mail", "outlook", "thunderbird"].contains(&basename) {
+        return "email";
+    }
+    if ["textedit", "notion", "obsidian", "typora", "gedit", "kate"].contains(&basename) {
+        return "docs";
+    }
 
     // Code editors / IDEs first (VS Code is Electron too - must precede chat matches)
     if [
@@ -255,6 +340,35 @@ mod tests {
         assert_eq!(cat("OUTLOOK.EXE"), "email");
         assert_eq!(cat("Obsidian.exe"), "docs");
         assert_eq!(cat("Notepad.exe"), "docs");
+    }
+
+    #[test]
+    fn portable_application_policy_matches_exact_native_names() {
+        for browser in [
+            "/Applications/Safari.app/Contents/MacOS/Safari",
+            "Google Chrome",
+            "/usr/bin/firefox",
+            "chromium",
+        ] {
+            assert!(super::is_browser_exe(browser));
+        }
+        for terminal in [
+            "/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal",
+            "iTerm2",
+            "/usr/bin/gnome-terminal-server",
+            "kitty",
+        ] {
+            assert!(super::is_terminal_exe(terminal));
+        }
+        for other in ["Codex", "notfirefox", "terminal-helper", ""] {
+            assert!(!super::is_browser_exe(other));
+            assert!(!super::is_terminal_exe(other));
+        }
+        assert_eq!(cat("/usr/bin/code"), "code");
+        assert_eq!(
+            cat("/Applications/Visual Studio Code.app/Contents/MacOS/Visual Studio Code"),
+            "code"
+        );
     }
 
     #[test]

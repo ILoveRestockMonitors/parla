@@ -18,6 +18,19 @@ static ACTIVE: AtomicUsize = AtomicUsize::new(0);
 static SETTINGS_WRITE: Mutex<()> = Mutex::new(());
 
 pub fn open_in_browser() {
+    #[cfg(not(windows))]
+    {
+        #[cfg(target_os = "macos")]
+        let opener = "open";
+        #[cfg(not(target_os = "macos"))]
+        let opener = "xdg-open";
+        if let Err(e) = std::process::Command::new(opener)
+            .arg("http://127.0.0.1:9393/")
+            .spawn()
+        {
+            eprintln!("[parla] browser unavailable ({e}); open http://127.0.0.1:9393/ manually.");
+        }
+    }
     #[cfg(windows)]
     unsafe {
         use windows::core::{w, PCWSTR};
@@ -158,6 +171,7 @@ fn handle(mut stream: TcpStream, started: Instant) {
         });
         let parsed = serde_json::from_str::<Value>(body).ok();
         let ok = match result.as_deref() {
+            Some("toggle") => crate::hotkey::request_toggle(),
             Some("stop") => crate::runtime::enqueue(crate::runtime::Command::Stop),
             Some("cancel") => crate::runtime::enqueue(crate::runtime::Command::Cancel),
             Some("retry") => crate::runtime::enqueue(crate::runtime::Command::Retry),
@@ -271,10 +285,8 @@ fn update_settings(body: &str) -> Result<String, String> {
         .lock()
         .map_err(|_| "settings lock poisoned")?;
     let patch: Value = serde_json::from_str(body).map_err(|e| format!("invalid JSON: {e}"))?;
-    let path = std::path::PathBuf::from(
-        std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA unavailable")?,
-    )
-    .join("Parla/settings.json");
+    let path = crate::platform::settings_path();
+    std::fs::create_dir_all(crate::platform::data_dir()).map_err(|e| e.to_string())?;
     let value = read_writable_settings(&path)?;
     let (value, s) = merge_settings(value, patch)?;
     crate::store::settings::atomic_write(
@@ -310,6 +322,7 @@ fn merge_settings(
     let obj = value.as_object_mut().ok_or("settings are not an object")?;
     let allowed = [
         "cleanup_mode",
+        "stutter_correction",
         "history_mode",
         "retain_audio_for_retry",
         "retry_audio_seconds",
@@ -469,10 +482,8 @@ fn persist_backend(backend: &str) -> Result<(), String> {
     let _guard = SETTINGS_WRITE
         .lock()
         .map_err(|_| "settings lock poisoned")?;
-    let path = format!(
-        "{}\\Parla\\settings.json",
-        std::env::var("LOCALAPPDATA").unwrap_or_default()
-    );
+    let path = crate::platform::settings_path();
+    std::fs::create_dir_all(crate::platform::data_dir()).map_err(|e| e.to_string())?;
     let mut root: Value = match std::fs::read_to_string(&path) {
         Ok(txt) => serde_json::from_str(&txt).map_err(|e| {
             format!("settings.json unreadable ({e}); fix it before switching backends")
@@ -568,15 +579,13 @@ fn status_json(started: Instant) -> String {
         "settings_error": settings_error,
         "settings": settings,
         "runtime": runtime,
+        "platform": crate::platform::diagnostics(),
     })
     .to_string()
 }
 
 fn load_settings() -> (Value, bool) {
-    let path = format!(
-        "{}\\Parla\\settings.json",
-        std::env::var("LOCALAPPDATA").unwrap_or_default()
-    );
+    let path = crate::platform::settings_path();
     match std::fs::read_to_string(&path) {
         Ok(txt) => match serde_json::from_str::<Value>(&txt) {
             Ok(v) => {
@@ -660,10 +669,7 @@ fn formatter_pinned(model: &str, port: u16) -> bool {
 /// Read-only COUNT(*) on the dictionary store; missing table/file = 0.
 fn dict_entries() -> i64 {
     use rusqlite::OpenFlags;
-    let path = format!(
-        "{}\\Parla\\dictionary.sqlite",
-        std::env::var("LOCALAPPDATA").unwrap_or_default()
-    );
+    let path = crate::platform::data_dir().join("dictionary.sqlite");
     let conn = match rusqlite::Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
     {
         Ok(c) => c,

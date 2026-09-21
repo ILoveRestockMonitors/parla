@@ -8,7 +8,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 PAYLOAD = ROOT / "release/bundle-payload"
-VERSION = "0.2.0-bundled-20260919"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def sha(path):
@@ -21,12 +21,8 @@ def main():
     shutil.copy2(ROOT / "docs/installer-welcome.txt", PAYLOAD / "INSTALL.txt")
     licenses = PAYLOAD / "licenses"
     licenses.mkdir(exist_ok=True)
-    pinned_notices = ROOT / "release/bundle-cache/THIRD-PARTY-NOTICES.txt"
-    if not pinned_notices.exists():
-        urllib.request.urlretrieve("https://github.com/ILoveRestockMonitors/parla/releases/download/v0.2.0-terminal-insertion-20260916/THIRD-PARTY-NOTICES.txt", pinned_notices)
-    if sha(pinned_notices) != "fb47566aa9be22a5e3932a28601d2b102a52a338df795e808fb4ca3ab1b6659a":
-        raise RuntimeError("Rust dependency notices changed")
-    shutil.copy2(pinned_notices, licenses / "Rust-dependencies.txt")
+    subprocess.run([__import__("sys").executable, str(ROOT / "scripts/collect-rust-notices.py"),
+                    "--output", str(licenses / "Rust-dependencies.txt")], check=True)
     extra = {
         "Whisper-model-MIT.txt": "https://raw.githubusercontent.com/openai/whisper/86098128c0b4f24f0e2aa2994de830614b474227/LICENSE",
         "Sherpa-onnx-Apache-2.0.txt": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/917bed95c8e5c7c18aa4d69fea42e9ef8ef0a60e/LICENSE",
@@ -66,7 +62,8 @@ Ollama and language models for optional Polished cleanup are not bundled.
             if "__pycache__" in path.parts or path.suffix == ".pyc":
                 continue  # Development caches are preserved locally and excluded by Inno Setup.
             files.append({"path":path.relative_to(PAYLOAD).as_posix(),"bytes":path.stat().st_size,"sha256":sha(path)})
-    manifest = {"version":VERSION,"platform":"windows-x64","default_engine":"parakeet",
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    manifest = {"version":VERSION,"source_commit":revision,"platform":"windows-x64","default_engine":"parakeet",
                 "default_cleanup":"faithful","ollama_included":False,
                 "whisper_source_revision":"48f628a84833905ee4a0658ee6d4a5c915ce1997",
                 "downloads":json.loads((ROOT / "scripts/bundle-sources.json").read_text()),

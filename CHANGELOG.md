@@ -98,3 +98,13 @@ Build this version from repository source. The standalone guide still embeds the
 These changes address a concrete transient-inspection failure path. The intermittent issue reported across applications has not been reproduced end to end; further reports now provide a specific failure reason. Recognition and formatting behavior are unchanged.
 
 The complete shareable guide embeds the earlier `0.2.0-reliability-20260908` snapshot. To build these changes, use this repository's source and scripts, not source extracted from that frozen appendix. The current build and installer scripts default to the version above; substitute it in the guide's explicit installation commands.
+# 0.3.0-portable-20260921
+
+Source changes; package verification/publication is recorded in `docs/current-state.md` and release evidence.
+
+- Added local, conservative stutter cleanup with a saved toggle. Raw recognition remains available; no sentence rewriting or extra language-model call is introduced.
+- Separated OS paths, global shortcuts, target observation, and text insertion from the shared Rust capture/recognition/formatting pipeline. Added macOS and Linux X11 adapters and explicit/manual-paste Wayland controls.
+- Added native macOS Apple Silicon/Intel PKG and Linux x64 DEB/archive build and installed-runtime checks. Windows keeps the offline installer with both speech engines; Unix packages include Parakeet.
+- Optimized resampling and short-recording buffer reuse; owned warm speech processes avoid repeated setup/health probes. Added reproducible component benchmarks, without claiming an end-to-end speed multiplier.
+- Added source revision metadata, a consolidated project handbook, and a source-linked public-launch plan.
+- Windows retains its native HUD and verified-replacement behavior. Unix currently uses dashboard feedback, single-line guarded clipboard paste, and manual recovery; Wayland has no automatic insertion.

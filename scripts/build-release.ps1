@@ -13,12 +13,13 @@ $cargo=(Get-Command cargo -ErrorAction SilentlyContinue).Source
 if(!$cargo){$cargo=Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'}
 if(!(Test-Path -LiteralPath $cargo -PathType Leaf)){throw 'Install Rust/rustup first'}
 if($Toolchain -notmatch '^[A-Za-z0-9._-]+-x86_64-pc-windows-gnu$'){throw 'This recipe requires a Windows x64 GNU toolchain'}
-$version='0.2.0-bundled-20260919'
-$target=Join-Path $env:TEMP 'parla-shareable-build'
+$version=(Get-Content -LiteralPath (Join-Path $root 'VERSION') -Raw).Trim()
+$target=Join-Path $env:TEMP 'parla-portable-build'
 $env:CARGO_TARGET_DIR=$target
 $env:CC=Join-Path $compiler 'gcc.exe'
 $env:AR=Join-Path $compiler 'ar.exe'
 $env:PATH=$compiler+';'+$env:PATH
+$env:PARLA_BUILD_REVISION=(& git -C $root rev-parse HEAD)
 & $cargo "+$Toolchain" test --locked --offline --manifest-path (Join-Path $root 'Cargo.toml')
 if($LASTEXITCODE -ne 0){throw 'Tests failed; do not package this build'}
 & $cargo "+$Toolchain" build --release --locked --offline --manifest-path (Join-Path $root 'Cargo.toml')

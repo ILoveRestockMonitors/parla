@@ -1,4 +1,5 @@
 // Formatter trait + §7.2 ContextEnvelope + output contracts.
+pub mod disfluency;
 pub mod layout;
 pub mod lists;
 pub mod local_llm;

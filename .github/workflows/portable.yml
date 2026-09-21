@@ -1,0 +1,80 @@
+name: Portable offline packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feat/portable-speech-20260921', 'main']
+    paths:
+      - 'src-tauri/**'
+      - 'Cargo.*'
+      - 'scripts/package-unix.py'
+      - 'scripts/bundle-sources.json'
+      - 'docs/unix-installation.md'
+      - '.github/workflows/portable.yml'
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'Cargo.*'
+      - 'scripts/package-unix.py'
+      - 'scripts/bundle-sources.json'
+      - '.github/workflows/portable.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: macos-arm64
+          - runner: macos-15-intel
+            target: macos-x64
+          - runner: ubuntu-22.04
+            target: linux-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.14'
+      - name: Install Linux build and runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libx11-dev libxtst-dev libxdo-dev libxcb1-dev libxkbcommon-dev pkg-config
+      - name: Select pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          rustup override set 1.98.0
+          cargo fetch --locked
+      - name: Validate archive handling
+        run: python scripts/package-unix.py --self-test
+      - name: Run Rust tests
+        run: cargo test --locked --workspace
+      - name: Build native optimized executable
+        run: cargo build --locked --release --workspace
+      - name: Assemble and install-test offline packages
+        if: github.event_name != 'pull_request'
+        run: python scripts/package-unix.py --target '${{ matrix.target }}' --output 'release/portable-${{ matrix.target }}'
+      - name: Upload verified installers and evidence
+        if: github.event_name != 'pull_request' && success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: parla-${{ matrix.target }}
+          path: release/portable-${{ matrix.target }}/dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

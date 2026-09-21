@@ -42,10 +42,10 @@ pub struct HistoryRow {
 
 /// Standard DB location, mirroring settings_path()'s convention.
 pub fn default_path() -> String {
-    format!(
-        "{}\\Parla\\history.sqlite",
-        std::env::var("LOCALAPPDATA").unwrap_or_default()
-    )
+    crate::platform::data_dir()
+        .join("history.sqlite")
+        .to_string_lossy()
+        .into_owned()
 }
 
 pub struct History {

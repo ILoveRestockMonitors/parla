@@ -1,6 +1,26 @@
 # Parla current state
 
-**Checked: 2026-09-19 · Current application release: `0.2.0-bundled-20260919`.**
+**Source updated: 2026-09-21 · New build: `0.3.0-portable-20260921`.**
+
+## September 21 changes and verification
+
+The shared application remains Rust. OpenWhispr's architecture informed the separation of OS integration from recording, model services, and cleanup; its Electron/TypeScript shell was not transplanted. No OpenWhispr source was copied. Reference: [OpenWhispr at a77fdce](https://github.com/OpenWhispr/openwhispr/tree/a77fdce34dbc0932cc3eee90646017df9be1c876), particularly `src/helpers/whisperServer.js`, the native platform helpers, and `src/locales/en/prompts.json`. OpenWhispr's general LLM cleanup permits grammar edits; Parla's new deterministic stutter stage follows the owner's instruction to preserve wording.
+
+- `Remove stutters` defaults on and can be disabled. It removes explicit repeated fragments (`b-b-book`), pronoun repetitions (`I I need`), and selected adjacent phrase restarts (`I want I want to leave`). It preserves tested grammatical repetition (`had had`, `that that`, `I think I think too much`), emphasis, numbers, negation, quotes/code, and dictionary-protected terms. Ambiguous cases are intentionally retained. This is transcript cleanup, not a guarantee of recognition/correction of all stuttered speech. Raw ASR and dictionary-normalized versions remain available.
+- The full Windows path remains native. macOS uses accessibility-based target checks and a guarded paste; X11 uses focused-window identity and an input-change monitor. Unix pastes are single-line and never send Return. Unix has manual recovery rather than verified Restore; its status display is the dashboard rather than the Windows floating HUD.
+- Wayland uses dashboard Start/stop or a desktop-bound `parla toggle` command, followed by Copy final/manual paste. Native Wayland global shortcuts and automatic injection are not implemented. Explicit dashboard/CLI recordings do not automatically paste into the dashboard or invoking terminal.
+- Speech processes stay warm. A running process owned by Parla and matching the configured model avoids repeated file deployment, weight scans, and health requests per utterance; child exits and model changes are still checked. External services still require readiness checks.
+- The resampler uses independent accumulation lanes and reuses phase normalization. One synthetic ten-second benchmark measured 1.78–1.80x faster conversion (about 10.3–10.5 ms down to 5.7–5.9 ms), with identical PCM on those inputs. This is a component result, **not** an overall dictation speed multiplier. Reproduce with `scripts/benchmark-resample.py`.
+- Short-recording buffers reuse their allocation and clear used samples; large recordings retain ownership transfer to avoid a new copy penalty. The microphone still starts/stops as before; it is not kept recording while idle.
+- `scripts/benchmark-asr.py` measured a 7.435-second public fixture on the development CPU: the existing four-thread Parakeet setting had a warm median of about 456 ms. Eight threads measured about 435 ms, too small and machine-specific a difference to justify changing everyone's default. No GPU or language rewrite speed claim is made.
+- Data paths are `%LOCALAPPDATA%/Parla`, `~/Library/Application Support/Parla`, and `${XDG_DATA_HOME:-~/.local/share}/parla`; `PARLA_DATA_DIR` provides an explicit override for isolated tests. Bundled model/runtime files are separate from writable state. Builds include source-revision metadata.
+- [Project handbook](PARLA-PROJECT-HANDBOOK.md) consolidates 32 inventoried Markdown files and their history. [Public launch plan](PARLA-PUBLIC-LAUNCH-PLAN.md) contains source-linked marketing research and a staged 90-day plan. Original documents remain intact.
+
+Windows tests and the controlled five-test Python HTTP suite pass during development. Native Unix build, installed-package verification, final Windows installer testing, and release upload evidence will be recorded below when complete. No macOS/Linux live microphone, permission-grant, or editor interaction has been performed on the Windows development host. The packages are unsigned/not notarized. See [Unix installation and build instructions](unix-installation.md).
+
+## Previous released baseline — September 19
+
+The following record describes `0.2.0-bundled-20260919`, before the changes above. Its test counts and download sizes are historical, not evidence for the new packages.
 
 **[Download the Windows x64 installer](https://github.com/ILoveRestockMonitors/parla/releases/latest/download/Parla-Setup.exe)** — about 963 MB, containing Parakeet, Whisper, both speech models, and private Python dependencies. It installs about 1.3 GB without additional speech downloads. See [installation instructions](windows-download.md). The installer and app are unsigned.
 

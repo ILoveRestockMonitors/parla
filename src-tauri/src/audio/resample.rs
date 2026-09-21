@@ -41,11 +41,30 @@ pub fn resample(input: &[f32], source_rate: u32, target_rate: u32) -> Vec<i16> {
             })
         })
         .collect();
+    // Interior windows all use the complete kernel. Its normalization is a
+    // phase constant; don't sum 64 weights and bounds-check 64 indices for
+    // every output sample. Keep the original edge calculation unchanged.
+    let normalization: Vec<f64> = coefficients.iter().map(|c| c.iter().sum()).collect();
     let len = (input.len() as u64 * target_rate as u64 / source_rate as u64) as usize;
     let mut out = Vec::with_capacity(len);
     for j in 0..len {
         let center = (j as u64 * source_rate as u64 / target_rate as u64) as isize;
         let weights = &coefficients[j % phases];
+        if center >= 32 && center + 32 <= input.len() as isize {
+            let samples = &input[center as usize - 32..center as usize + 32];
+            // Independent lanes avoid a serial 64-add dependency chain and
+            // let the compiler vectorize without CPU-specific instructions.
+            let mut sums = [0.0f64; 4];
+            for (samples, weights) in samples.chunks_exact(4).zip(weights.chunks_exact(4)) {
+                for lane in 0..4 {
+                    sums[lane] += samples[lane] as f64 * weights[lane];
+                }
+            }
+            let sum: f64 = sums.iter().sum();
+            let norm = normalization[j % phases];
+            out.push(quantize(if norm.abs() > 1e-9 { sum / norm } else { 0.0 }));
+            continue;
+        }
         let mut sum = 0.0;
         let mut norm = 0.0;
         for (k, &weight) in weights.iter().enumerate() {

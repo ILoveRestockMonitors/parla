@@ -235,7 +235,7 @@ unsafe extern "system" fn ll_hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM
     windows::Win32::UI::WindowsAndMessaging::CallNextHookEx(None, code, wparam, lparam)
 }
 
-fn push(ev: TriggerEvent) {
+pub(super) fn push(ev: TriggerEvent) {
     if let Ok(mut q) = events_cell().lock() {
         if q.len() >= 64 {
             q.clear();

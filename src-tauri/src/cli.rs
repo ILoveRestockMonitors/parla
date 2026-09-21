@@ -6,20 +6,37 @@
 use crate::dictionary::{Dictionary, Entry};
 
 pub fn dict_store_path() -> String {
-    format!(
-        "{}\\Parla\\dictionary.sqlite",
-        std::env::var("LOCALAPPDATA").unwrap_or_default()
-    )
+    crate::platform::data_dir()
+        .join("dictionary.sqlite")
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Handle dictionary verbs. Returns Some(exit code) when `args` is a
 /// dictionary command; None falls through to normal startup.
 pub fn run(args: &[String]) -> Option<i32> {
     match args.get(1)?.as_str() {
+        "toggle" | "stop" | "cancel" => Some(control(&args[1])),
         "list" => Some(cmd_list()),
         "add" => Some(cmd_add(&args[2..])),
         "remove" => Some(cmd_remove(args.get(2).map(String::as_str))),
         _ => None,
+    }
+}
+
+/// Desktop shortcut bindings use this localhost control path on Wayland.
+/// Explicit controls always produce a manual-paste result, even under X11.
+fn control(command: &str) -> i32 {
+    match ureq::post("http://127.0.0.1:9393/api/command")
+        .set("X-Parla-Control", "1")
+        .timeout(std::time::Duration::from_secs(2))
+        .send_json(serde_json::json!({"command":command}))
+    {
+        Ok(_) => 0,
+        Err(error) => {
+            eprintln!("[parla] control unavailable: {error}. Start Parla first.");
+            1
+        }
     }
 }
 
@@ -40,6 +57,10 @@ fn parse_add(rest: &[String]) -> Option<(String, Option<String>)> {
 }
 
 fn open_store() -> Result<Dictionary, i32> {
+    if let Err(e) = std::fs::create_dir_all(crate::platform::data_dir()) {
+        eprintln!("[parla] data directory: {e}");
+        return Err(1);
+    }
     Dictionary::open(&dict_store_path()).map_err(|e| {
         eprintln!("[parla] {e}");
         1

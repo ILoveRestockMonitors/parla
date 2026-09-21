@@ -6,14 +6,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const GUIDE: &str =
-    "https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md";
+const GUIDE: &str = if cfg!(windows) {
+    "https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md"
+} else {
+    "https://github.com/ILoveRestockMonitors/parla/blob/main/docs/unix-installation.md"
+};
 const PARAKEET_GUIDE: &str = "https://github.com/ILoveRestockMonitors/parla/blob/main/docs/windows-download.md#optional-parakeet-setup";
 const WHISPER: &str = "https://github.com/ggml-org/whisper.cpp/releases";
 const WHISPER_MODEL: &str = "https://huggingface.co/ggerganov/whisper.cpp";
-const PYTHON: &str = "https://www.python.org/downloads/windows/";
+const PYTHON: &str = "https://www.python.org/downloads/";
 const PARAKEET_MODEL: &str = "https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-transducer/nemo-transducer-models.html";
-const OLLAMA: &str = "https://ollama.com/download/windows";
+const OLLAMA: &str = "https://ollama.com/download";
 const OLLAMA_MODELS: &str = "https://ollama.com/library";
 
 fn item(
@@ -39,7 +42,11 @@ fn file_item(id: &str, title: &str, path: &str, detail: &str, links: &[(&str, &s
         title,
         if found { "found" } else { "not_found" },
         true,
-        if found { "The configured file is available. Check Speech server readiness before dictating." } else { detail },
+        if found {
+            "The configured file is available. Check Speech server readiness before dictating."
+        } else {
+            detail
+        },
         links,
     );
     row["path"] = json!(path);
@@ -70,7 +77,7 @@ fn executable_path(program: &str) -> Option<PathBuf> {
     if path.components().count() > 1 || path.is_absolute() {
         return nonempty_file(path).then(|| path.to_path_buf());
     }
-    let filename = if program.to_ascii_lowercase().ends_with(".exe") {
+    let filename = if !cfg!(windows) || program.to_ascii_lowercase().ends_with(".exe") {
         program.to_string()
     } else {
         format!("{program}.exe")
@@ -241,10 +248,21 @@ pub fn inspect(settings: &Settings) -> Value {
             PythonCheck::NotFound => "not_detected",
             PythonCheck::Failed => "check_failed",
         };
-        let mut python_item = item("python", "Python for Parakeet", python_state, true,
-            if python_state == "found" { "Parla found its Python runtime. No separate Python installation is needed." }
-            else { "Parakeet requires Python. Reinstall the bundled Parla app, or follow the manual Python 3.12 x64 setup guide and restart Parla." },
-            &[("Download Python", PYTHON), ("Parakeet setup", PARAKEET_GUIDE)]);
+        let mut python_item = item(
+            "python",
+            "Python for Parakeet",
+            python_state,
+            true,
+            if python_state == "found" {
+                "Parla found its Python runtime. No separate Python installation is needed."
+            } else {
+                "Parakeet requires Python. Reinstall the bundled Parla app, or follow the manual Python 3.12 x64 setup guide and restart Parla."
+            },
+            &[
+                ("Download Python", PYTHON),
+                ("Parakeet setup", PARAKEET_GUIDE),
+            ],
+        );
         python_item["path"] = json!(python);
         items.push(python_item);
         items.push(item("sherpa", "sherpa-onnx and NumPy", match check {
@@ -253,10 +271,21 @@ pub fn inspect(settings: &Settings) -> Value {
             else { "These packages run Parakeet. Reinstall the bundled app, or follow the manual setup instructions for the Python environment Parla uses." },
             &[("Install Parakeet packages", PARAKEET_GUIDE)]));
         let model_found = parakeet_files_present(Path::new(&settings.parakeet_model_dir));
-        let mut weights = item("parakeet-model", "Parakeet speech model", if model_found { "found" } else { "not_found" }, true,
-            if model_found { "The speech model files are available. Check Speech server readiness before dictating." }
-            else { "Reinstall the bundled app, or manually set up Parakeet TDT 0.6B v2 INT8 with matching encoder, decoder, joiner ONNX files and tokens.txt in the configured folder." },
-            &[("Download Parakeet model", PARAKEET_MODEL), ("Parakeet setup", PARAKEET_GUIDE)]);
+        let mut weights = item(
+            "parakeet-model",
+            "Parakeet speech model",
+            if model_found { "found" } else { "not_found" },
+            true,
+            if model_found {
+                "The speech model files are available. Check Speech server readiness before dictating."
+            } else {
+                "Reinstall the bundled app, or manually set up Parakeet TDT 0.6B v2 INT8 with matching encoder, decoder, joiner ONNX files and tokens.txt in the configured folder."
+            },
+            &[
+                ("Download Parakeet model", PARAKEET_MODEL),
+                ("Parakeet setup", PARAKEET_GUIDE),
+            ],
+        );
         weights["path"] = json!(settings.parakeet_model_dir);
         items.push(weights);
     }

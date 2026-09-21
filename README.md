@@ -1,6 +1,10 @@
-# Parla — local dictation for Windows
+# Parla — local dictation
 
-Parla is a Windows x64 speech-to-text app inspired by Whisperflow. Press **Ctrl+Space** to start recording, then press it again to finish, or hold **Ctrl+Win** for quick dictation. A small native HUD shows recording and processing status, and a local dashboard provides settings, history, corrections, and recovery controls.
+Parla is a local speech-to-text app with a shared Rust core and native Windows, macOS, and Linux adapters. Windows uses **Ctrl+Space** to start/stop and **Ctrl+Win** for hold-to-talk. The Unix default toggle is **Ctrl+Alt+Space**; macOS hold-to-talk uses **Ctrl+Command**. A local dashboard provides settings, corrections, history, recording controls, and recovery. The floating HUD is Windows-only.
+
+The `0.3.0-portable-20260921` source adds conservative stutter removal, faster audio conversion and reusable short-recording buffers. Stutter cleanup preserves wording and runs without an LLM; it can be disabled in settings. See the [current verification and limitations](docs/current-state.md), [Mac/Linux installation guide](docs/unix-installation.md), [consolidated project handbook](docs/PARLA-PROJECT-HANDBOOK.md), and [public launch plan](docs/PARLA-PUBLIC-LAUNCH-PLAN.md).
+
+Platform code is not a claim that every desktop/editor has been tested. X11 supports guarded automatic paste; Wayland uses explicit recording controls and manual paste. macOS requires Microphone, Accessibility, and Input Monitoring permissions. Unix insertion stays on one line and does not support verified Restore. Published package evidence is attached to the corresponding release.
 
 ## Download for Windows
 
@@ -12,7 +16,7 @@ The installer includes **Parakeet, Whisper, both speech models, and a private Py
 
 ## Start here
 
-**Current release: `0.2.0-bundled-20260919`; source and documentation checked September 19, 2026.** Read [Current state](docs/current-state.md) for the implemented features, test results, and remaining gaps, and [Changes](CHANGELOG.md) for the shipped updates. This repository is the authoritative maintained source.
+**Development release: `0.3.0-portable-20260921`; source updated September 21, 2026.** Read [Current state](docs/current-state.md) for implementation, test results, package publication status, and remaining gaps. [Changes](CHANGELOG.md) records release behavior. Build this repository directly; old embedded source snapshots are historical.
 
 **[Complete shareable build guide](PARLA-COMPLETE-SHAREABLE-BUILD-GUIDE.md)** — detailed prerequisites, exact commands, architecture, implementation contracts, troubleshooting, tests, installation, and rollback. The guide also contains a checksummed source snapshot and a Python extractor, so the single Markdown file can be shared independently of this repository.
 
@@ -24,6 +28,7 @@ Automatic insertion uses Unicode typing. Before an ordinary insertion attempt, P
 
 - Local recognition through bundled Parakeet, with bundled whisper.cpp available as an alternative.
 - **Faithful** cleanup preserves recognized wording while applying explicit dictionary corrections and the automatic numeric/list behavior described below.
+- **Remove stutters** (on by default) removes explicit fragments such as `b-b-book`, repeated pronouns such as `I I need`, and selected adjacent phrase restarts such as `I want I want to leave`. It leaves ambiguous emphasis, grammatical repetition, numbers, negation, quoted text, and protected dictionary terms alone. This is conservative transcript cleanup, not a guarantee that every spoken stutter is recognized or corrected. Raw and dictionary-normalized text remain available for recovery.
 - Clear lists automatically become separate bullet lines in writing apps such as Codex, in both cleanup modes. Say "I need eggs, milk, bread, and cheese pizza" or "First, call Alex. Second, review the quote." Introductions stay above the list; multiword items stay together. Natural pauses help recognition add item separators. Unclear boundaries stay as spoken text, and code editors keep ordinary dictation.
 - Browser dictation defaults to normal sentences on one line, including address/search bars and page editors. Chrome, Edge, Firefox, Brave, Opera, Vivaldi and other recognized browsers receive text without Enter or Shift+Enter, so dictation does not submit searches or navigate between list items. Recovered or polished multiline text is flattened before typing; numeric entry still works normally. You submit the text yourself.
 - Hermes CLI in Windows Terminal and classic console hosts tolerates terminal output and prompt redraws while dictating, provided the same pane and native focus remain, the input monitor reports no intervening typing/clicks, and no output text is selected. Terminal dictation stays on one line and sends no Enter/Shift+Enter. Terminal output is not used as polishing context or as an editable range for Restore.
@@ -35,7 +40,7 @@ Automatic insertion uses Unicode typing. Before an ordinary insertion attempt, P
 
 ## Build overview
 
-Use Windows x64, the Rust GNU toolchain, and a complete WinLibs compiler distribution. Follow the guide for installation and verification of these prerequisites. This is a Rust executable with an embedded HTML dashboard. The `src-tauri` directory name and React scaffold are historical; no npm build is needed.
+For Windows, use the Rust GNU toolchain and a complete WinLibs compiler distribution. For macOS/Linux, follow the [native build and packaging guide](docs/unix-installation.md). This is a Rust executable with an embedded HTML dashboard. The `src-tauri` directory name and React scaffold are historical; no npm build is needed. Python is the local adapter around native sherpa-onnx inference, not the app runtime.
 
 From the repository root, after installing the prerequisites:
 

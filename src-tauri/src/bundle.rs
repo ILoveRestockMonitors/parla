@@ -1,4 +1,4 @@
-//! Paths for the offline installer payload. Mutable user data stays in LocalAppData/Parla.
+//! Read-only installer payloads; all mutable state lives in platform::data_dir.
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -11,16 +11,30 @@ pub struct BundledPaths {
 
 impl BundledPaths {
     pub fn at(root: &Path) -> Option<Self> {
-        let files = [
+        let (python, whisper) = if cfg!(windows) {
+            (
+                "runtime/python/python.exe",
+                "engines/whisper/whisper-server.exe",
+            )
+        } else {
+            (
+                "runtime/python/bin/python3",
+                "engines/whisper/whisper-server",
+            )
+        };
+        let mut files = vec![
             "bundle-manifest.json",
-            "engines/whisper/whisper-server.exe",
-            "models/whisper/ggml-small.bin",
-            "runtime/python/python.exe",
+            python,
             "models/parakeet/encoder.int8.onnx",
             "models/parakeet/decoder.int8.onnx",
             "models/parakeet/joiner.int8.onnx",
             "models/parakeet/tokens.txt",
         ];
+        // Windows includes both engines. Portable Unix packages contain the
+        // same local Parakeet model; an external Whisper install is optional.
+        if cfg!(windows) {
+            files.extend([whisper, "models/whisper/ggml-small.bin"]);
+        }
         if !files.iter().all(|p| {
             root.join(p)
                 .metadata()
@@ -29,25 +43,34 @@ impl BundledPaths {
             return None;
         }
         Some(Self {
-            whisper: root.join(files[1]).to_string_lossy().into_owned(),
-            whisper_model: root.join(files[2]).to_string_lossy().into_owned(),
+            whisper: root.join(whisper).to_string_lossy().into_owned(),
+            whisper_model: root
+                .join("models/whisper/ggml-small.bin")
+                .to_string_lossy()
+                .into_owned(),
             parakeet_model: root.join("models/parakeet").to_string_lossy().into_owned(),
-            python: root.join(files[3]).to_string_lossy().into_owned(),
+            python: root.join(python).to_string_lossy().into_owned(),
         })
     }
 }
 
 pub fn installed() -> Option<BundledPaths> {
-    BundledPaths::at(std::env::current_exe().ok()?.parent()?)
+    let executable = std::env::current_exe().ok()?;
+    let directory = executable.parent()?;
+    #[cfg(target_os = "macos")]
+    if directory.file_name().is_some_and(|name| name == "MacOS") {
+        if let Some(paths) = BundledPaths::at(&directory.parent()?.join("Resources")) {
+            return Some(paths);
+        }
+    }
+    BundledPaths::at(directory)
 }
 
 pub fn initialize_settings() -> Result<(), String> {
     if installed().is_none() {
         return Err("Bundled speech files are incomplete; reinstall Parla.".into());
     }
-    let path =
-        PathBuf::from(std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA unavailable")?)
-            .join("Parla/settings.json");
+    let path = crate::platform::data_dir().join("settings.json");
     write_new_settings(&path, &crate::store::settings::Settings::default())
 }
 
@@ -92,6 +115,7 @@ mod tests {
             "models/parakeet/decoder.int8.onnx",
             "models/parakeet/joiner.int8.onnx",
             "models/parakeet/tokens.txt",
+            "runtime/python/bin/python3",
         ];
         for name in files {
             let file = root.join(name);
@@ -101,7 +125,11 @@ mod tests {
         let paths = BundledPaths::at(&root).unwrap();
         assert_eq!(
             Path::new(&paths.python),
-            root.join("runtime/python/python.exe")
+            root.join(if cfg!(windows) {
+                "runtime/python/python.exe"
+            } else {
+                "runtime/python/bin/python3"
+            })
         );
         std::fs::write(root.join(files[7]), b"").unwrap();
         assert!(BundledPaths::at(&root).is_none());
