@@ -1,5 +1,14 @@
 # Changes
 
+## 0.3.1-speech-cleanup-20260921
+
+- Polished mode now uses a readable speech draft, a dedicated transcript-cleanup prompt, and bounded validation. Clear filler sounds, repeated attempts and adjacent explicit corrections are cleaned before punctuation and small grammar repairs. Raw and dictionary-normalized text stay available for recovery.
+- The reported paragraph now retains “Yeah, I'm not sure” and the final “I'm purposely stuttering my words right now.” A personal confirmed dictionary correction supplies “Parla”; generic code does not guess names.
+- Protect meaningful uses of like/you know, complete distinct thoughts, numeric/negation anchors, dictionary terms and identifiers. Cleanup cannot introduce an editor command. Turning Clean speech off preserves words in the model pass as well.
+- Cleanup mode selection saves immediately and displays its active value; stale status requests cannot revert a saved mode. Other pending settings remain pending until Save settings.
+- Retain the shared Rust core and existing Windows/Mac/Linux packaging. OpenWhispr's architecture informed the change; its source and prompt were not copied.
+- Validation before packaging: 147 Rust tests passed, 4 opt-in live checks ignored; 11 local-model golden cases passed; four dashboard settings scenarios passed. See current state and release assets for package verification.
+
 ## 0.3.0-portable-20260921
 
 Package verification and publication are recorded in [current state](docs/current-state.md) and release evidence.

@@ -6,8 +6,9 @@ pub mod local_llm;
 pub mod numbers;
 pub mod prompt;
 pub mod shortcircuit;
+pub mod speech;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ContextEnvelope {
     pub mode: String, // "dictation" | "command"
     pub raw_transcript: String,
@@ -20,7 +21,7 @@ pub struct ContextEnvelope {
     pub options: Options,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct FieldContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<String>,
@@ -33,7 +34,7 @@ pub struct FieldContext {
     pub text_after: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Options {
     pub max_tokens: u32,
     pub stream: bool,
@@ -86,7 +87,20 @@ pub fn format_complete(
 ) -> Result<FormatResult, String> {
     let mut text = String::new();
     let mut overflow = false;
-    let metadata = formatter.format(envelope, &mut |token| {
+    let speech_cleanup = envelope
+        .user_style
+        .as_ref()
+        .and_then(|s| s.get("speech_cleanup"))
+        .and_then(|v| v.as_bool())
+        != Some(false);
+    let mut input = envelope.clone();
+    if speech_cleanup {
+        input.raw_transcript = speech::polish_input(
+            &input.raw_transcript,
+            input.vocabulary.as_deref().unwrap_or(&[]),
+        );
+    }
+    let metadata = formatter.format(&input, &mut |token| {
         if text.len().saturating_add(token.len()) <= 64 * 1024 {
             text.push_str(&token);
         } else {
@@ -100,10 +114,11 @@ pub fn format_complete(
         return Err("formatter produced empty candidate".into());
     }
     let candidate = text.trim().to_string();
-    validate_candidate(
+    validate_candidate_with_policy(
         &envelope.raw_transcript,
         &candidate,
         envelope.vocabulary.as_deref(),
+        speech_cleanup,
     )?;
     if metadata.completion_reason.as_deref() != Some("stop") {
         return Err("formatter completion is not a normal stop".into());
@@ -119,6 +134,23 @@ pub fn validate_candidate(
     candidate: &str,
     vocabulary: Option<&[String]>,
 ) -> Result<(), String> {
+    validate_candidate_with_policy(raw, candidate, vocabulary, true)
+}
+
+fn validate_candidate_with_policy(
+    raw: &str,
+    candidate: &str,
+    vocabulary: Option<&[String]>,
+    speech_cleanup: bool,
+) -> Result<(), String> {
+    // Explicit spoken replacement is resolved before protecting numeric/name
+    // anchors, so "at 2, I mean 3" can legitimately become "at 3".
+    let baseline = if speech_cleanup {
+        speech::prepare(raw, vocabulary.unwrap_or(&[]), true, true, true)
+    } else {
+        raw.to_string()
+    };
+    let raw = baseline.as_str();
     if candidate.len() > 64 * 1024 {
         return Err("formatter candidate exceeds limit".into());
     }
@@ -187,14 +219,15 @@ pub fn validate_candidate(
             .split(|c: char| !c.is_alphanumeric() && c != '\'')
             .filter(|w| !w.is_empty())
             .map(str::to_lowercase)
-            .filter(|w| !matches!(w.as_str(), "um" | "uh" | "erm" | "hmm"))
             .collect()
     };
     let source = words(raw);
     let output = words(candidate);
-    // A word-count threshold can admit truncated paragraphs or reversed
-    // subjects. Require the full substantive word sequence at every length.
-    if source != output {
+    // Permit bounded fillers/abandoned restarts and small grammatical repairs,
+    // but reject reordering, new content words and unexplained tail truncation.
+    if source != output
+        && !(speech_cleanup && speech::wording_preserved(raw, candidate, vocabulary.unwrap_or(&[])))
+    {
         return Err("formatter changed the wording or word order".into());
     }
     if all_raw.len() >= 8 && candidate.split_whitespace().count() * 2 < all_raw.len() {
@@ -354,5 +387,22 @@ mod integrity_tests {
         assert!(
             validate_candidate("um hello Claude Code", "Hello, Claude Code.", Some(&vocab)).is_ok()
         );
+    }
+    #[test]
+    fn reported_paragraph_accepts_cleanup_but_keeps_uncertainty_and_names() {
+        let raw="This is an um test. Um yeah, I'm not sure. I'm looking at Parla right now. I'm the b l I'd be I'm purposely stubborn I'm purposely stuttering my words right now.";
+        let expected="This is a test. Yeah, I'm not sure. I'm looking at Parla right now. I'm purposely stuttering my words right now.";
+        let vocab = vec!["Parla".into()];
+        assert!(validate_candidate(raw, expected, Some(&vocab)).is_ok());
+        assert!(
+            validate_candidate(raw, &expected.replace("not sure", "sure"), Some(&vocab)).is_err()
+        );
+        assert!(
+            validate_candidate(raw, &expected.replace("Parla", "Paris"), Some(&vocab)).is_err()
+        );
+        assert!(validate_candidate_with_policy(raw, expected, Some(&vocab), false).is_err());
+        assert!(validate_candidate_with_policy("um hello", "Hello.", None, false).is_err());
+        assert!(validate_candidate("Send it at 2, I mean 3.", "Send it at 3.", None).is_ok());
+        assert!(validate_candidate("Send it at 2.", "Send it at 3.", None).is_err());
     }
 }

@@ -249,7 +249,7 @@ fn run_format_json(path: &str) -> i32 {
             .into(),
         raw_transcript: raw_transcript.into(),
         context,
-        user_style: None,
+        user_style: obj.get("user_style").cloned(),
         language: obj
             .get("language")
             .and_then(|v| v.as_str())

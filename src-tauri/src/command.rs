@@ -25,6 +25,26 @@ pub fn classify(raw: &str) -> Option<Command> {
     }
 }
 
+/// Cleanup may polish dictated words but may not introduce an editor action.
+pub fn classify_unchanged(raw: &str, final_text: &str) -> Option<Command> {
+    classify(final_text).filter(|command| classify(raw).as_ref() == Some(command))
+}
+
+#[cfg(test)]
+mod cleanup_command_tests {
+    use super::*;
+    #[test]
+    fn speech_cleanup_cannot_promote_dictation_to_editor_action() {
+        assert_eq!(
+            classify_unchanged("Scratch THAT.", "scratch that"),
+            Some(Command::ScratchThat)
+        );
+        assert_eq!(classify_unchanged("um scratch that", "scratch that"), None);
+        assert_eq!(classify_unchanged("I said bullets", "bullets"), None);
+        assert_eq!(classify_unchanged("scratch that", "bullets"), None);
+    }
+}
+
 fn normalize(s: &str) -> String {
     s.trim()
         .trim_end_matches(['.', '!', '?', ','])

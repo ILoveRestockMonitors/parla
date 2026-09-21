@@ -111,12 +111,16 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
         result.normalized = Some(normalized.clone());
         let t = Instant::now();
         let normalized = if job.settings.stutter_correction {
-            formatter::disfluency::clean(&normalized, &vocabulary.canonical).into_owned()
+            formatter::speech::prepare(&normalized, &vocabulary.canonical, true, true, true)
         } else {
             normalized
         };
-        timings["stutter_cleanup"] = serde_json::json!(t.elapsed().as_millis());
+        timings["speech_cleanup"] = serde_json::json!(t.elapsed().as_millis());
         result.final_text = Some(normalized.clone());
+        if normalized.trim().is_empty() {
+            result.insertion = "empty".into();
+            return Ok(());
+        }
         // Numbers work everywhere; browsers keep prose and writing apps get
         // automatic lists. Retain raw/normalized words for original recovery.
         if let Some(text) = formatter::layout::automatic_text(&normalized, job.app.as_deref()) {
@@ -149,7 +153,9 @@ fn process(job: &Job, generation: &AtomicU64) -> LastResult {
                     selected_text: ctx.and_then(|c| c.selected_text.clone()),
                     text_after: ctx.and_then(|c| c.text_after.clone()),
                 },
-                user_style: None,
+                user_style: Some(
+                    serde_json::json!({"speech_cleanup":job.settings.stutter_correction}),
+                ),
                 language: "en-US".into(),
                 vocabulary: Some(vocabulary.canonical),
                 options: Options {
@@ -509,7 +515,12 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
                                 target = receipt.after.clone();
                             }
                         }
-                        if let Some(cmd) = command::classify(&text) {
+                        // Model cleanup must never turn dictated content into
+                        // a destructive command. Require the original command.
+                        if let Some(cmd) = command::classify_unchanged(
+                            done.result.normalized.as_deref().unwrap_or(""),
+                            &text,
+                        ) {
                             let result = if !target.matches_current(120) {
                                 Err("Command target changed.".into())
                             } else {
@@ -562,7 +573,9 @@ pub fn run_loop(mic: &mut MicCapture, dict: &dictionary::Dictionary) -> Result<(
                         done.result.insertion = "preview".into();
                     }
                 } else {
-                    done.result.insertion = "failed".into();
+                    if done.result.insertion != "empty" {
+                        done.result.insertion = "failed".into();
+                    }
                     session.forget();
                 }
                 done.result.stage_ms["commit"] = serde_json::json!(t.elapsed().as_millis());

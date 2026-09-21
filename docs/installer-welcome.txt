@@ -4,7 +4,7 @@ This installer includes Parla, the Parakeet and Whisper speech engines, both spe
 
 After installation, open Parla from your desktop or Start menu. Its dashboard opens in your browser. Wait for the speech engine to become ready, click the field you want to dictate into, press Ctrl+Space, speak, then press Ctrl+Space again.
 
-The default is Parakeet with Faithful cleanup and conservative stutter removal. Disable Remove stutters in settings if you prefer the uncorrected wording. Raw recognition remains available in recovery. Whisper is available as an alternative in the dashboard. Processing stays on this computer. First model loading may take a few seconds. Allow microphone access for desktop applications if Windows asks.
+The default is Parakeet with Faithful cleanup and Clean speech enabled. Clean speech removes clear fillers, repetitions and explicit spoken corrections. Polished mode adds bounded false-start cleanup and local-model punctuation and grammar repair. Disable Clean speech in settings to keep the recognized words. Changing the cleanup mode applies immediately; other settings use Save settings. Raw recognition remains available in recovery. Whisper is available as an alternative in the dashboard. Processing stays on this computer. First model loading may take a few seconds. Allow microphone access for desktop applications if Windows asks.
 
 Ollama is optional and is not included. It is used only if you choose Polished cleanup; the dashboard provides its download and setup links.
 

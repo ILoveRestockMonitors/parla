@@ -1,6 +1,6 @@
 [package]
 name = "parla"
-version = "0.3.0"
+version = "0.3.1"
 description = "Parla - local-first system-wide voice dictation (clean-room clone)"
 edition = "2021"
 

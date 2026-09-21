@@ -3,14 +3,14 @@
 use std::borrow::Cow;
 
 #[derive(Debug)]
-struct Token<'a> {
-    start: usize,
-    end: usize,
-    text: &'a str,
-    protected: bool,
+pub(super) struct Token<'a> {
+    pub start: usize,
+    pub end: usize,
+    pub text: &'a str,
+    pub protected: bool,
 }
 
-fn tokens<'a>(text: &'a str, vocabulary: &[String]) -> Vec<Token<'a>> {
+pub(super) fn tokens<'a>(text: &'a str, vocabulary: &[String]) -> Vec<Token<'a>> {
     let mut out = Vec::new();
     let mut quoted = None;
     let mut code = false;
@@ -77,7 +77,9 @@ fn repeatable(token: &Token<'_>) -> bool {
     let word = key(token.text);
     !token.protected
         && !word.is_empty()
-        && word.chars().all(char::is_alphabetic)
+        && word
+            .chars()
+            .all(|c| c.is_alphabetic() || matches!(c, '\'' | '’'))
         && !matches!(
             word.to_ascii_lowercase().as_str(),
             "no" | "not"
@@ -121,7 +123,30 @@ fn repeatable(token: &Token<'_>) -> bool {
 fn starter(word: &str) -> bool {
     matches!(
         word.to_ascii_lowercase().as_str(),
-        "i" | "we" | "you" | "he" | "she" | "they" | "it"
+        "i" | "we"
+            | "you"
+            | "he"
+            | "she"
+            | "they"
+            | "it"
+            | "i'm"
+            | "i’m"
+            | "i'd"
+            | "i’d"
+            | "i'll"
+            | "i’ll"
+            | "i've"
+            | "i’ve"
+            | "we're"
+            | "we’re"
+            | "you're"
+            | "you’re"
+            | "they're"
+            | "they’re"
+            | "the"
+            | "a"
+            | "an"
+            | "to"
     )
 }
 
@@ -206,7 +231,7 @@ pub fn clean<'a>(text: &'a str, vocabulary: &[String]) -> Cow<'a, str> {
                     })
                     && text[words[index].start..words[index + length * 2 - 1].end]
                         .chars()
-                        .all(|c| c.is_alphabetic() || c == ' ' || c == '\t' || c == ',')
+                        .all(|c| c.is_alphabetic() || matches!(c, ' ' | '\t' | ',' | '\'' | '’'))
                 {
                     repeated = Some(length);
                     break;

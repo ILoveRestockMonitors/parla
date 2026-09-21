@@ -8,7 +8,7 @@
 [Setup]
 AppId={{61AF8F6E-9BC6-445F-90D4-8F2D334071E9}
 AppName=Parla
-AppVersion=0.3.0-portable-20260921
+AppVersion=0.3.1-speech-cleanup-20260921
 AppPublisher=Parla
 AppPublisherURL=https://github.com/ILoveRestockMonitors/parla
 AppSupportURL=https://github.com/ILoveRestockMonitors/parla
@@ -28,7 +28,7 @@ UninstallDisplayIcon={app}\parla.exe
 CloseApplications=no
 RestartApplications=no
 SetupLogging=yes
-VersionInfoVersion=0.3.0.0
+VersionInfoVersion=0.3.1.0
 InfoBeforeFile={#PayloadDir}\INSTALL.txt
 
 [Tasks]

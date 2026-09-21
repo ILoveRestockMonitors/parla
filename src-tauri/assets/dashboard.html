@@ -131,14 +131,15 @@
       <div class="sub" id="settings-line">loading&hellip;</div>
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <label>Cleanup <select id="cleanup-mode"><option value="faithful">Faithful</option><option value="polished">Polished</option></select></label>
+        <span id="cleanup-active" class="sub" role="status" aria-live="polite"></span>
         <label><input type="checkbox" id="retain-audio"> Retain retry audio</label>
         <label>TTL <input id="retry-seconds" type="number" min="1" max="600" style="width:70px"></label>
         <label><input type="checkbox" id="chimes-enabled"> Chimes</label>
         <label><input type="checkbox" id="hud-enabled"> HUD</label>
-        <label><input type="checkbox" id="stutter-correction"> Remove stutters</label>
+        <label><input type="checkbox" id="stutter-correction"> Clean speech</label>
         <button id="save-settings">Save settings</button><span id="settings-error" class="sub"></span>
       </div>
-      <div class="sub">Remove stutters preserves your wording. Ambiguous emphasis and repeated numbers stay unchanged.</div>
+      <div class="sub">Cleanup mode applies immediately. Use Save settings for the other controls. Clean speech removes ums, repeated speech, and clear spoken corrections. Polished also cleans abandoned starts and light grammar with your local model. Raw text remains available.</div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="alias" aria-label="Heard spelling" placeholder="heard spelling"><input id="canonical" aria-label="Correct spelling" placeholder="correct spelling"><button id="learn">Learn correction</button><button id="restore">Restore original</button>
       </div>
@@ -248,11 +249,14 @@ function render(d) {
   $("hist-note").textContent = note[1];
 
   const s = d.settings || {};
+  lastSavedSettings=s;
   if ((s.cleanup_mode || "faithful") === "faithful") { $("fmt-chip").textContent="unused in Faithful"; $("fmt-chip").className="chip"; }
   if (!window.settingsDirty) {
     $("cleanup-mode").value=s.cleanup_mode||"faithful"; $("stutter-correction").checked=s.stutter_correction!==false; $("retain-audio").checked=!!s.retain_audio_for_retry; $("retry-seconds").value=s.retry_audio_seconds||120; $("chimes-enabled").checked=s.chimes_enabled!==false; $("hud-enabled").checked=s.hud_enabled!==false;
   }
   const rt = d.runtime || {};
+  const appliedMode=(rt.effective_settings||s).cleanup_mode||"faithful";
+  $("cleanup-active").textContent="Active: "+(appliedMode==="polished"?"Polished":"Faithful");
   $("runtime-line").textContent = (rt.mode || "idle") + (rt.recording ? " · " + Math.floor((rt.recording_elapsed_ms||0)/1000) + "s" : "") + " · outstanding " + (rt.queued || 0) + (rt.processing ? " · processing" : "") + (rt.error ? " · " + rt.error : "");
   const lr = rt.last_result || {};
   $("restore").disabled=rt.recording || rt.processing || (rt.queued||0)>0 || !["verified","restored"].includes(lr.insertion);
@@ -281,9 +285,34 @@ function render(d) {
   else                            { dot.className = "dot bad"; }
 }
 window.settingsDirty=false;
+let settingsSaving=false;
+let settingsRevision=0;
+let lastSavedSettings={};
 document.querySelectorAll("#cleanup-mode,#retain-audio,#retry-seconds,#chimes-enabled,#hud-enabled,#stutter-correction").forEach(e=>e.addEventListener("input",()=>window.settingsDirty=true));
 async function postJson(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-Parla-Control":"1"},body:JSON.stringify(body)});let d={};try{d=await r.json()}catch(_){}if(!r.ok)throw new Error(d.error||"request failed");return d;}
-$("save-settings").onclick=async()=>{try{await postJson("/api/settings",{cleanup_mode:$("cleanup-mode").value,stutter_correction:$("stutter-correction").checked,retain_audio_for_retry:$("retain-audio").checked,retry_audio_seconds:Number($("retry-seconds").value),chimes_enabled:$("chimes-enabled").checked,hud_enabled:$("hud-enabled").checked});$("settings-error").textContent="Saved";window.settingsDirty=false;poll();checkSetup()}catch(e){$("settings-error").textContent=e.message}};
+function settingsForm(){return {cleanup_mode:$("cleanup-mode").value,stutter_correction:$("stutter-correction").checked,retain_audio_for_retry:$("retain-audio").checked,retry_audio_seconds:Number($("retry-seconds").value),chimes_enabled:$("chimes-enabled").checked,hud_enabled:$("hud-enabled").checked};}
+async function saveSettings(patch,modeOnly=false){
+  if(settingsSaving)return;
+  settingsSaving=true;settingsRevision++;
+  $("cleanup-mode").disabled=true;$("save-settings").disabled=true;
+  $("settings-error").textContent=modeOnly?"Applying cleanup mode…":"Saving…";
+  try{
+    const result=await postJson("/api/settings",patch);
+    lastSavedSettings=result.settings;
+    $("settings-error").textContent=modeOnly?"Cleanup mode applied":"Saved";
+    $("cleanup-active").textContent="Active: "+(result.settings.cleanup_mode==="polished"?"Polished":"Faithful");
+  }catch(e){
+    if(modeOnly)$("cleanup-mode").value=lastSavedSettings.cleanup_mode||"faithful";
+    $("settings-error").textContent="Not saved: "+e.message;
+  }finally{
+    window.settingsDirty=Object.entries(settingsForm()).some(([key,value])=>lastSavedSettings[key]!==value);
+    settingsSaving=false;settingsRevision++;
+    $("cleanup-mode").disabled=false;$("save-settings").disabled=false;
+    poll();checkSetup();
+  }
+}
+$("save-settings").onclick=()=>saveSettings(settingsForm());
+$("cleanup-mode").onchange=()=>saveSettings({cleanup_mode:$("cleanup-mode").value},true);
 $("learn").onclick=async()=>{try{await postJson("/api/command",{command:"learn",alias:$("alias").value,canonical:$("canonical").value});$("settings-error").textContent="Correction queued; check status for errors"}catch(e){$("settings-error").textContent=e.message}};
 $("restore").onclick=async()=>{try{await postJson("/api/command",{command:"restore"});$("settings-error").textContent="Restore requested"}catch(e){$("settings-error").textContent=e.message}};
 
@@ -294,10 +323,13 @@ function esc(t) {
 }
 
 async function poll() {
+  const revision=settingsRevision;
   try {
     document.body.classList.add("stale");
     const r = await fetch("/api/status", { cache: "no-store" });
-    render(await r.json());
+    const state=await r.json();
+    // A poll started before a save must not put an old mode back in the UI.
+    if(!settingsSaving && revision===settingsRevision)render(state);
   } catch (e) {
     $("dot").className = "dot bad";
   } finally {

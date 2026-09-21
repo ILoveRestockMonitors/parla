@@ -43,7 +43,7 @@ pub struct Settings {
     pub parakeet_model_dir: String,
     #[serde(default = "default_cleanup_mode")]
     pub cleanup_mode: String,
-    /// Remove explicit stutters without paraphrasing or collapsing emphasis.
+    /// Clean fillers/repeated speech and allow bounded Polished speech repairs.
     #[serde(default = "default_stutter_correction")]
     pub stutter_correction: bool,
     #[serde(default = "default_max_recording_seconds")]
