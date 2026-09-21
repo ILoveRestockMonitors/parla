@@ -1,0 +1,58 @@
+name: Attach verified native packages to draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful Portable offline packages run ID
+        required: true
+        type: string
+      expected_revision:
+        description: Exact 40-character source commit SHA
+        required: true
+        type: string
+      tag:
+        description: Existing draft release tag (never published by this workflow)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: attach-portable-draft-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  attach:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate transfer guards without network access
+        run: python3 scripts/attach-portable-draft.py --self-test
+      - name: Verify and attach existing native artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+          EXPECTED_REVISION: ${{ inputs.expected_revision }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 scripts/attach-portable-draft.py \
+            --source-run "$SOURCE_RUN" \
+            --expected-revision "$EXPECTED_REVISION" \
+            --tag "$RELEASE_TAG" \
+            --output "$RUNNER_TEMP/native-transfer"
+      - name: Preserve small transfer index for independent review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-transfer-index
+          path: |
+            ${{ runner.temp }}/native-transfer/native-assets.json
+            ${{ runner.temp }}/native-transfer/SHA256SUMS-native.txt
+          if-no-files-found: error
+          retention-days: 14
