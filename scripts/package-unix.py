@@ -339,6 +339,17 @@ def fix_component_locations(path: Path) -> None:
     path.write_bytes(plistlib.dumps(components))
 
 
+def verify_macos_receipt(receipt: dict, files: list[str]) -> None:
+    # pkgutil records install-location relative to volume (e.g. Applications),
+    # even when pkgbuild was given the absolute /Applications destination.
+    volume = PurePosixPath(receipt.get("volume", ""))
+    location = PurePosixPath(receipt.get("install-location", "").lstrip("/"))
+    destination = volume / location
+    manifest_name = PurePosixPath("Parla.app/Contents/Resources/bundle-manifest.json")
+    if not volume.is_absolute() or destination != PurePosixPath("/Applications") or manifest_name not in {PurePosixPath(name) for name in files}:
+        raise RuntimeError(f"Installed receipt does not target /Applications/Parla.app: {receipt}")
+
+
 def tar_output(source: Path, target: Path, epoch: int) -> None:
     def normalize(info):
         info.uid = info.gid = 0
@@ -403,9 +414,7 @@ def package(args) -> None:
         installed = Path("/Applications/Parla.app")
         receipt = plistlib.loads(subprocess.check_output(["pkgutil", "--pkg-info-plist", "com.parla.dictation"]))
         receipt_files = subprocess.check_output(["pkgutil", "--files", "com.parla.dictation"], text=True).splitlines()
-        manifest_name = "Parla.app/Contents/Resources/bundle-manifest.json"
-        if receipt.get("install-location", "").rstrip("/") != "/Applications" or manifest_name not in receipt_files:
-            raise RuntimeError(f"Installed receipt does not target /Applications/Parla.app: {receipt}")
+        verify_macos_receipt(receipt, receipt_files)
         if not (installed / "Contents/Resources/bundle-manifest.json").is_file():
             raise RuntimeError("Installer did not create /Applications/Parla.app despite its receipt")
         verification["macos_receipt"] = receipt
@@ -443,6 +452,18 @@ def package(args) -> None:
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_macos_receipt_resolves_location_against_volume(self):
+        files = ["Parla.app/Contents/Resources/bundle-manifest.json"]
+        for location in ("Applications", "/Applications"):
+            verify_macos_receipt({"volume": "/", "install-location": location}, files)
+        for receipt, installed_files in [
+            ({"volume": "/", "install-location": "Users/runner/staging"}, files),
+            ({"volume": "/Volumes/Other", "install-location": "Applications"}, files),
+            ({"volume": "/", "install-location": "Applications"}, []),
+        ]:
+            with self.assertRaises(RuntimeError):
+                verify_macos_receipt(receipt, installed_files)
+
     def test_macos_component_cannot_relocate_to_staging_app(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "components.plist"
