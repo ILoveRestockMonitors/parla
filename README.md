@@ -1,3 +1,5 @@
+<img src="assets/parla.png" width="128" height="128" alt="Purple Parla app logo">
+
 # Parla — local dictation
 
 Parla is a local speech-to-text app with a shared Rust core and native Windows, macOS, and Linux adapters. Windows uses **Ctrl+Space** to start/stop and **Ctrl+Win** for hold-to-talk. The Unix default toggle is **Ctrl+Alt+Space**; macOS hold-to-talk uses **Ctrl+Command**. A local dashboard provides settings, corrections, history, recording controls, and recovery. The floating HUD is Windows-only.
